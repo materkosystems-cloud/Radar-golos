@@ -213,6 +213,8 @@ components:
         - $ref: "#/components/schemas/Fixture"
         - type: object
           properties:
+            apiMinute:
+              type: integer
             minute:
               type: integer
             homeScore:
@@ -220,6 +222,7 @@ components:
             awayScore:
               type: integer
           required:
+            - apiMinute
             - minute
             - homeScore
             - awayScore

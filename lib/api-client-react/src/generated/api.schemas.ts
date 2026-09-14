@@ -30,6 +30,7 @@ export interface TodayFixturesResponse {
 }
 
 export type LiveFixture = Fixture & {
+  apiMinute: number;
   minute: number;
   homeScore: number;
   awayScore: number;

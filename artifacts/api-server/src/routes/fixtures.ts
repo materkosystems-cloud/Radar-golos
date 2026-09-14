@@ -9,7 +9,7 @@ const router: IRouter = Router();
 
 const API_FOOTBALL_URL = "https://v3.football.api-sports.io/fixtures";
 const TODAY_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
-const LIVE_CACHE_TTL_MS = 20 * 60 * 1000;
+const LIVE_CACHE_TTL_MS = 60 * 1000;
 const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "BT", "P", "LIVE"]);
 
 type ApiFootballFixture = {
@@ -62,6 +62,7 @@ type NormalizedFixture = {
 };
 
 type NormalizedLiveFixture = NormalizedFixture & {
+  apiMinute: number;
   minute: number;
   homeScore: number;
   awayScore: number;
@@ -136,7 +137,14 @@ function normalizeLiveFixture(
   currentServerDate: string,
 ): NormalizedLiveFixture | null {
   const fixture = normalizeFixture(item);
-  const minute = item.fixture?.status?.elapsed;
+  const elapsedMinute = item.fixture?.status?.elapsed;
+  const shortStatusMinute = Number(item.fixture?.status?.short);
+  const minute =
+    typeof elapsedMinute === "number"
+      ? elapsedMinute
+      : Number.isFinite(shortStatusMinute)
+        ? shortStatusMinute
+        : null;
   const homeScore = item.goals?.home;
   const awayScore = item.goals?.away;
 
@@ -144,15 +152,22 @@ function normalizeLiveFixture(
     !fixture ||
     !LIVE_STATUSES.has(fixture.status) ||
     getServerDate(fixture.kickoff) !== currentServerDate ||
-    typeof minute !== "number" ||
+    minute === null ||
     typeof homeScore !== "number" ||
     typeof awayScore !== "number"
   ) {
     return null;
   }
 
+  console.log("[Ao Vivo minuto: API → interface]", {
+    fixtureId: fixture.id,
+    apiMinute: minute,
+    interfaceMinute: minute,
+  });
+
   return {
     ...fixture,
+    apiMinute: minute,
     minute,
     homeScore,
     awayScore,

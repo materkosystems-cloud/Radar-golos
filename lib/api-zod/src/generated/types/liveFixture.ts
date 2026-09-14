@@ -8,6 +8,7 @@
 import type { Fixture } from './fixture';
 
 export type LiveFixture = Fixture & {
+  apiMinute: number;
   minute: number;
   homeScore: number;
   awayScore: number;

@@ -53,6 +53,7 @@ export const GetLiveFixturesResponse = zod.object({
   "kickoff": zod.coerce.date(),
   "status": zod.string()
 }).and(zod.object({
+  "apiMinute": zod.number().int(),
   "minute": zod.number().int(),
   "homeScore": zod.number().int(),
   "awayScore": zod.number().int()
