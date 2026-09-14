@@ -64,3 +64,40 @@ export const GetLiveFixturesResponse = zod.object({
 })
 
 
+/**
+ * @summary Get the public VAPID key
+ */
+export const GetVapidPublicKeyResponse = zod.object({
+  "publicKey": zod.string()
+})
+
+
+/**
+ * @summary Store a browser push subscription
+ */
+export const SubscribePushBody = zod.object({
+  "endpoint": zod.string().url(),
+  "expirationTime": zod.number().nullish(),
+  "keys": zod.object({
+  "p256dh": zod.string(),
+  "auth": zod.string()
+})
+})
+
+export const SubscribePushResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Store fixture IDs that should be monitored
+ */
+export const UpdateFavoriteIdsBody = zod.object({
+  "fixtureIds": zod.array(zod.number().int())
+})
+
+export const UpdateFavoriteIdsResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+

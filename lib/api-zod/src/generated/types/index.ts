@@ -6,9 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './favoriteIdsRequest';
 export * from './fixture';
 export * from './fixturesUnavailable';
 export * from './healthStatus';
 export * from './liveFixture';
 export * from './liveFixturesResponse';
+export * from './pushSubscription';
+export * from './pushSubscriptionKeys';
+export * from './successResponse';
 export * from './todayFixturesResponse';
+export * from './vapidPublicKeyResponse';

@@ -49,3 +49,27 @@ export interface FixturesUnavailable {
   warning: string;
 }
 
+export interface VapidPublicKeyResponse {
+  publicKey: string;
+}
+
+export interface PushSubscriptionKeys {
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushSubscription {
+  endpoint: string;
+  /** @nullable */
+  expirationTime?: number | null;
+  keys: PushSubscriptionKeys;
+}
+
+export interface FavoriteIdsRequest {
+  fixtureIds: number[];
+}
+
+export interface SuccessResponse {
+  ok: boolean;
+}
+

@@ -1050,6 +1050,57 @@ main {
   line-height: 1.6;
 }
 
+.notifications-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px 18px;
+  flex-wrap: wrap;
+  margin: -8px 0 22px;
+  padding: 14px;
+  border: 1px solid rgba(96, 220, 141, 0.12);
+  border-radius: 14px;
+  background: rgba(96, 220, 141, 0.035);
+}
+
+.notifications-panel button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(96, 220, 141, 0.22);
+  border-radius: 10px;
+  color: #b8e8c9;
+  background: rgba(96, 220, 141, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notifications-panel button.is-enabled {
+  color: #72e89d;
+}
+
+.notifications-panel button:disabled {
+  cursor: default;
+  opacity: 0.76;
+}
+
+.notifications-panel button svg {
+  width: 15px;
+}
+
+.notifications-panel p,
+.notifications-panel span {
+  margin: 0;
+  color: #74847a;
+  font-size: 11px;
+}
+
+.notifications-panel span {
+  flex-basis: 100%;
+  color: #d7a293;
+}
+
 .skeleton-card {
   min-height: 310px;
   opacity: 1;

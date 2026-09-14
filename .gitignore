@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Runtime push subscriptions and notification history
+/artifacts/api-server/data/push-state.json

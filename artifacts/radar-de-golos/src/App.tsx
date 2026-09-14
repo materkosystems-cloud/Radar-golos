@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Activity,
   BarChart3,
+  Bell,
+  BellRing,
   CalendarDays,
   ChevronRight,
   Clock3,
@@ -19,8 +21,12 @@ import {
 import {
   getGetLiveFixturesQueryKey,
   getGetTodayFixturesQueryKey,
+  getGetVapidPublicKeyQueryKey,
   useGetLiveFixtures,
+  useGetVapidPublicKey,
+  useSubscribePush,
   useGetTodayFixtures,
+  useUpdateFavoriteIds,
   type Fixture,
   type LiveFixture,
 } from '@workspace/api-client-react';
@@ -71,6 +77,7 @@ type FavoriteMatch = {
 };
 
 const FAVORITES_STORAGE_KEY = 'radar-de-golos:favorites';
+const NOTIFICATIONS_STORAGE_KEY = 'radar-de-golos:notifications-enabled';
 
 const modeConfig: Record<
   ViewMode,
@@ -185,6 +192,17 @@ function loadFavorites(): FavoriteMatch[] {
   } catch {
     return [];
   }
+}
+
+function urlBase64ToUint8Array(value: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const output = new Uint8Array(new ArrayBuffer(raw.length));
+  for (let index = 0; index < raw.length; index += 1) {
+    output[index] = raw.charCodeAt(index);
+  }
+  return output;
 }
 
 function formatKickoff(value: string): string {
@@ -590,6 +608,15 @@ function LoadingState() {
 function Dashboard() {
   const [mode, setMode] = useState<ViewMode>('full');
   const [favorites, setFavorites] = useState<FavoriteMatch[]>(loadFavorites);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    () =>
+      typeof Notification !== 'undefined' &&
+      window.localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) === 'true' &&
+      Notification.permission === 'granted',
+  );
+  const [notificationError, setNotificationError] = useState<string | null>(
+    null,
+  );
   const [selectedMatch, setSelectedMatch] = useState<SelectedMatch | null>(
     null,
   );
@@ -607,6 +634,15 @@ function Dashboard() {
       refetchInterval: TWENTY_MINUTES,
     },
   });
+  const vapidQuery = useGetVapidPublicKey({
+    query: {
+      queryKey: getGetVapidPublicKeyQueryKey(),
+      enabled: mode === 'favorites',
+      staleTime: Infinity,
+    },
+  });
+  const subscribePushMutation = useSubscribePush();
+  const updateFavoriteIdsMutation = useUpdateFavoriteIds();
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -614,6 +650,76 @@ function Dashboard() {
       JSON.stringify(favorites),
     );
   }, [favorites]);
+
+  useEffect(() => {
+    void updateFavoriteIdsMutation
+      .mutateAsync({
+        data: { fixtureIds: favorites.map((favorite) => favorite.fixture.id) },
+      })
+      .catch(() => {
+        setNotificationError(
+          'Não foi possível sincronizar os favoritos para notificações.',
+        );
+      });
+  }, [favorites]);
+
+  const enableNotifications = async () => {
+    setNotificationError(null);
+    try {
+      if (
+        typeof Notification === 'undefined' ||
+        !('serviceWorker' in navigator) ||
+        !('PushManager' in window)
+      ) {
+        throw new Error('unsupported');
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('permission');
+
+      const publicKey =
+        vapidQuery.data?.publicKey ?? (await vapidQuery.refetch()).data?.publicKey;
+      if (!publicKey) throw new Error('missing-key');
+
+      const registration =
+        (await navigator.serviceWorker.getRegistration()) ??
+        (await navigator.serviceWorker.register('/sw.js'));
+      const existing = await registration.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        }));
+      const serialized = subscription.toJSON();
+      if (
+        !serialized.endpoint ||
+        !serialized.keys?.p256dh ||
+        !serialized.keys.auth
+      ) {
+        throw new Error('invalid-subscription');
+      }
+      await subscribePushMutation.mutateAsync({
+        data: {
+          endpoint: serialized.endpoint,
+          expirationTime: serialized.expirationTime ?? null,
+          keys: {
+            p256dh: serialized.keys.p256dh,
+            auth: serialized.keys.auth,
+          },
+        },
+      });
+      window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, 'true');
+      setNotificationsEnabled(true);
+    } catch (error) {
+      setNotificationsEnabled(false);
+      window.localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
+      setNotificationError(
+        error instanceof Error && error.message === 'permission'
+          ? 'A permissão de notificações não foi concedida.'
+          : 'Não foi possível ativar as notificações neste navegador.',
+      );
+    }
+  };
 
   const activeQuery = mode === 'live' ? liveQuery : todayQuery;
   const currentFixtureIds = useMemo(
@@ -875,6 +981,41 @@ function Dashboard() {
             {fixtureCount} {fixtureCount === 1 ? 'jogo' : 'jogos'}
           </div>
         </section>
+
+        {mode === 'favorites' && (
+          <div className="notifications-panel">
+            <button
+              type="button"
+              className={notificationsEnabled ? 'is-enabled' : undefined}
+              onClick={() => void enableNotifications()}
+              disabled={
+                notificationsEnabled ||
+                subscribePushMutation.isPending ||
+                vapidQuery.isLoading
+              }
+              data-testid="button-enable-notifications"
+            >
+              {notificationsEnabled ? (
+                <BellRing aria-hidden="true" />
+              ) : (
+                <Bell aria-hidden="true" />
+              )}
+              {notificationsEnabled
+                ? 'Notificações ativadas ✓'
+                : subscribePushMutation.isPending
+                  ? 'A ativar notificações…'
+                  : 'Ativar notificações'}
+            </button>
+            <p>
+              Alertas de golos e cartões apenas para jogos favoritos ao vivo.
+            </p>
+            {notificationError && (
+              <span role="status" data-testid="status-notification-error">
+                {notificationError}
+              </span>
+            )}
+          </div>
+        )}
 
         {isLoading ? (
           <LoadingState />

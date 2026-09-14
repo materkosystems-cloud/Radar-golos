@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: fixtures
     description: Real football fixtures with simulated analysis data
+  - name: push
+    description: Web Push subscriptions and favorite fixture monitoring
 paths:
   /healthz:
     get:
@@ -64,6 +66,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FixturesUnavailable"
+  /vapid-public-key:
+    get:
+      operationId: getVapidPublicKey
+      tags: [push]
+      summary: Get the public VAPID key
+      responses:
+        "200":
+          description: Public key used by PushManager
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapidPublicKeyResponse"
+  /subscribe:
+    post:
+      operationId: subscribePush
+      tags: [push]
+      summary: Store a browser push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscription"
+      responses:
+        "200":
+          description: Subscription stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /favorites:
+    post:
+      operationId: updateFavoriteIds
+      tags: [push]
+      summary: Store fixture IDs that should be monitored
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FavoriteIdsRequest"
+      responses:
+        "200":
+          description: Favorite IDs stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 components:
   schemas:
     HealthStatus:
@@ -174,4 +224,50 @@ components:
       required:
         - error
         - warning
+    VapidPublicKeyResponse:
+      type: object
+      properties:
+        publicKey:
+          type: string
+      required:
+        - publicKey
+    PushSubscriptionKeys:
+      type: object
+      properties:
+        p256dh:
+          type: string
+        auth:
+          type: string
+      required:
+        - p256dh
+        - auth
+    PushSubscription:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        expirationTime:
+          type: ["number", "null"]
+        keys:
+          $ref: "#/components/schemas/PushSubscriptionKeys"
+      required:
+        - endpoint
+        - keys
+    FavoriteIdsRequest:
+      type: object
+      properties:
+        fixtureIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - fixtureIds
+    SuccessResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
 

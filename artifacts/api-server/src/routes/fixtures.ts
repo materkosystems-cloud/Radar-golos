@@ -293,6 +293,13 @@ async function getLiveFixtures(
   }
 }
 
+export async function getLiveFixturesForNotifications(
+  log: (obj: object, msg: string) => void,
+): Promise<NormalizedLiveFixture[]> {
+  const result = await getLiveFixtures(log);
+  return result.data.fixtures;
+}
+
 router.get("/fixtures/today", async (req, res) => {
   const date = getServerDate();
 
