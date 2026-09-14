@@ -29,6 +29,21 @@ export interface TodayFixturesResponse {
   warning: string | null;
 }
 
+export type LiveFixture = Fixture & {
+  minute: number;
+  homeScore: number;
+  awayScore: number;
+};
+
+export interface LiveFixturesResponse {
+  fixtures: LiveFixture[];
+  fetchedAt: string;
+  nextRefreshAt: string;
+  stale: boolean;
+  /** @nullable */
+  warning: string | null;
+}
+
 export interface FixturesUnavailable {
   error: string;
   warning: string;

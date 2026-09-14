@@ -18,6 +18,7 @@ import type {
 import type {
   FixturesUnavailable,
   HealthStatus,
+  LiveFixturesResponse,
   TodayFixturesResponse
 } from './api.schemas';
 
@@ -135,7 +136,7 @@ export const getGetTodayFixturesUrl = () => {
 }
 
 /**
- * Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 15 minutes and returns the last valid response when an upstream refresh fails.
+ * Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 2 hours and returns the last valid response when an upstream refresh fails.
  * @summary Get today's football fixtures
  */
 export const getTodayFixtures = async ( options?: Parameters<typeof customFetch>[1]): Promise<TodayFixturesResponse> => {
@@ -192,6 +193,84 @@ export function useGetTodayFixtures<TData = Awaited<ReturnType<typeof getTodayFi
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetTodayFixturesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetLiveFixturesUrl = () => {
+
+
+
+
+  return `/api/fixtures/live`
+}
+
+/**
+ * Returns only fixtures currently in progress from API-Football. The upstream list is refreshed at most once every 20 minutes.
+ * @summary Get genuinely live football fixtures
+ */
+export const getLiveFixtures = async ( options?: Parameters<typeof customFetch>[1]): Promise<LiveFixturesResponse> => {
+
+  return customFetch<LiveFixturesResponse>(getGetLiveFixturesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLiveFixturesQueryKey = () => {
+    return [
+    `/api/fixtures/live`
+    ] as const;
+    }
+
+
+export const getGetLiveFixturesQueryOptions = <TData = Awaited<ReturnType<typeof getLiveFixtures>>, TError = ErrorType<FixturesUnavailable>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveFixtures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLiveFixturesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLiveFixtures>>> = ({ signal }) => getLiveFixtures({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLiveFixtures>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLiveFixturesQueryResult = NonNullable<Awaited<ReturnType<typeof getLiveFixtures>>>
+export type GetLiveFixturesQueryError = ErrorType<FixturesUnavailable>
+
+
+/**
+ * @summary Get genuinely live football fixtures
+ */
+
+export function useGetLiveFixtures<TData = Awaited<ReturnType<typeof getLiveFixtures>>, TError = ErrorType<FixturesUnavailable>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLiveFixtures>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLiveFixturesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

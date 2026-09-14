@@ -9,4 +9,6 @@
 export * from './fixture';
 export * from './fixturesUnavailable';
 export * from './healthStatus';
+export * from './liveFixture';
+export * from './liveFixturesResponse';
 export * from './todayFixturesResponse';

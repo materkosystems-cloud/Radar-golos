@@ -15,15 +15,19 @@ import {
   Trophy,
 } from 'lucide-react';
 import {
+  getGetLiveFixturesQueryKey,
   getGetTodayFixturesQueryKey,
+  useGetLiveFixtures,
   useGetTodayFixtures,
   type Fixture,
+  type LiveFixture,
 } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-const FIFTEEN_MINUTES = 15 * 60 * 1000;
+const TWO_HOURS = 2 * 60 * 60 * 1000;
+const TWENTY_MINUTES = 20 * 60 * 1000;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,9 +48,6 @@ type SimulatedAnalysis = {
   goalsAverage: number;
   form: number;
   confidence: 'Alta' | 'Média' | 'Baixa';
-  minute?: number;
-  homeScore?: number;
-  awayScore?: number;
 };
 
 const modeConfig: Record<
@@ -71,9 +72,9 @@ const modeConfig: Record<
     icon: TimerReset,
   },
   live: {
-    label: "Ao vivo 75'+",
-    shortLabel: "75'+",
-    description: 'Minuto e placar simulados sobre jogos reais de hoje',
+    label: 'Ao Vivo',
+    shortLabel: 'Ao Vivo',
+    description: 'Minuto e placar reais dos jogos atualmente em disputa',
     icon: Radio,
   },
 };
@@ -116,13 +117,6 @@ function buildSimulation(
     ),
     form: 58 + Math.round(seededValue(fixtureId, modeOffset + 3) * 34),
     confidence,
-    ...(mode === 'live'
-      ? {
-          minute: 75 + Math.floor(seededValue(fixtureId, 31) * 14),
-          homeScore: Math.floor(seededValue(fixtureId, 33) * 4),
-          awayScore: Math.floor(seededValue(fixtureId, 35) * 3),
-        }
-      : {}),
   };
 }
 
@@ -131,6 +125,25 @@ function formatKickoff(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function formatFixtureDate(value: string): string {
+  const date = new Date(value);
+  const monthNames = [
+    'Jan',
+    'Fev',
+    'Mar',
+    'Abr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Set',
+    'Out',
+    'Nov',
+    'Dez',
+  ];
+  return `${String(date.getDate()).padStart(2, '0')} ${monthNames[date.getMonth()]}`;
 }
 
 function formatDate(value?: string): string {
@@ -178,7 +191,7 @@ function MatchCard({
   mode,
   index,
 }: {
-  fixture: Fixture;
+  fixture: Fixture | LiveFixture;
   mode: MarketMode;
   index: number;
 }) {
@@ -186,6 +199,7 @@ function MatchCard({
     () => buildSimulation(fixture.id, mode),
     [fixture.id, mode],
   );
+  const liveFixture = mode === 'live' ? (fixture as LiveFixture) : null;
 
   return (
     <article
@@ -202,12 +216,17 @@ function MatchCard({
           {mode === 'live' ? (
             <>
               <span className="live-dot" aria-hidden="true" />
-              <strong>{analysis.minute}'</strong>
+              <strong>
+                {formatFixtureDate(fixture.kickoff)} · {liveFixture?.minute}'
+              </strong>
             </>
           ) : (
             <>
               <Clock3 aria-hidden="true" />
-              <strong>{formatKickoff(fixture.kickoff)}</strong>
+              <strong>
+                {formatFixtureDate(fixture.kickoff)} ·{' '}
+                {formatKickoff(fixture.kickoff)}
+              </strong>
             </>
           )}
         </div>
@@ -227,10 +246,10 @@ function MatchCard({
           </div>
         </div>
         {mode === 'live' ? (
-          <div className="score" aria-label="Placar simulado">
-            <strong>{analysis.homeScore}</strong>
+          <div className="score" aria-label="Placar real">
+            <strong>{liveFixture?.homeScore}</strong>
             <span>—</span>
-            <strong>{analysis.awayScore}</strong>
+            <strong>{liveFixture?.awayScore}</strong>
           </div>
         ) : (
           <div className="versus">VS</div>
@@ -266,7 +285,13 @@ function MatchCard({
   );
 }
 
-function EmptyState({ isError }: { isError: boolean }) {
+function EmptyState({
+  isError,
+  isLive,
+}: {
+  isError: boolean;
+  isLive: boolean;
+}) {
   return (
     <div className="empty-state">
       <div className="empty-icon">
@@ -277,12 +302,16 @@ function EmptyState({ isError }: { isError: boolean }) {
         )}
       </div>
       <h2>
-        {isError
+        {isLive && !isError
+          ? 'Nenhum jogo ao vivo no momento — atualizando a cada 20 minutos'
+          : isError
           ? 'Não foi possível carregar os jogos'
           : 'Sem jogos disponíveis para hoje'}
       </h2>
       <p>
-        {isError
+        {isLive && !isError
+          ? 'A lista é verificada novamente a cada 20 minutos.'
+          : isError
           ? 'A ligação aos dados reais falhou e ainda não existe uma lista válida em cache.'
           : 'A API-Football não devolveu partidas para a data de hoje.'}
       </p>
@@ -307,16 +336,28 @@ function LoadingState() {
 
 function Dashboard() {
   const [mode, setMode] = useState<MarketMode>('full');
-  const { data, isLoading, isError, isFetching, refetch } =
-    useGetTodayFixtures({
+  const todayQuery = useGetTodayFixtures({
       query: {
         queryKey: getGetTodayFixturesQueryKey(),
-        staleTime: FIFTEEN_MINUTES,
-        refetchInterval: FIFTEEN_MINUTES,
+        staleTime: TWO_HOURS,
+        refetchInterval: TWO_HOURS,
       },
     });
+  const liveQuery = useGetLiveFixtures({
+    query: {
+      queryKey: getGetLiveFixturesQueryKey(),
+      staleTime: TWENTY_MINUTES,
+      refetchInterval: TWENTY_MINUTES,
+    },
+  });
 
-  const fixtures = data?.fixtures ?? [];
+  const activeQuery = mode === 'live' ? liveQuery : todayQuery;
+  const fixtures =
+    mode === 'live'
+      ? (liveQuery.data?.fixtures ?? [])
+      : (todayQuery.data?.fixtures ?? []);
+  const displayDate =
+    mode === 'live' ? undefined : todayQuery.data?.date;
   const ModeIcon = modeConfig[mode].icon;
 
   return (
@@ -342,7 +383,7 @@ function Dashboard() {
           <div className="hero-copy">
             <div className="eyebrow">
               <CalendarDays aria-hidden="true" />
-              {formatDate(data?.date)}
+              {formatDate(displayDate)}
             </div>
             <h1>O radar dos jogos de hoje</h1>
             <p>
@@ -353,20 +394,20 @@ function Dashboard() {
           <div className="hero-summary">
             <div>
               <span>Jogos encontrados</span>
-              <strong>{isLoading ? '—' : fixtures.length}</strong>
+              <strong>{activeQuery.isLoading ? '—' : fixtures.length}</strong>
             </div>
             <div>
               <span>Última lista</span>
-              <strong>{formatUpdatedAt(data?.fetchedAt)}</strong>
+              <strong>{formatUpdatedAt(activeQuery.data?.fetchedAt)}</strong>
             </div>
             <button
               type="button"
-              onClick={() => void refetch()}
-              disabled={isFetching}
+              onClick={() => void activeQuery.refetch()}
+              disabled={activeQuery.isFetching}
               aria-label="Verificar lista em cache"
             >
               <RefreshCw
-                className={isFetching ? 'spinning' : undefined}
+                className={activeQuery.isFetching ? 'spinning' : undefined}
                 aria-hidden="true"
               />
             </button>
@@ -376,16 +417,17 @@ function Dashboard() {
         <section className="data-notice" aria-label="Informação dos dados">
           <ShieldCheck aria-hidden="true" />
           <p>
-            ⚠️ Jogos reais de hoje · Odds e estatísticas ainda simuladas —
-            versão de teste
+            {mode === 'live'
+              ? '⚠️ Jogos reais ao vivo (quando disponíveis) · Estatísticas e probabilidade ainda simuladas'
+              : '⚠️ Jogos reais de hoje · Odds e estatísticas ainda simuladas — versão de teste'}
           </p>
         </section>
 
-        {(data?.stale || data?.warning) && (
+        {(activeQuery.data?.stale || activeQuery.data?.warning) && (
           <div className="cache-warning" role="status">
             <RefreshCw aria-hidden="true" />
             <span>
-              {data.warning ??
+              {activeQuery.data.warning ??
                 'não foi possível atualizar os jogos — usando última lista válida'}
             </span>
           </div>
@@ -424,10 +466,10 @@ function Dashboard() {
           </div>
         </section>
 
-        {isLoading ? (
+        {activeQuery.isLoading ? (
           <LoadingState />
         ) : fixtures.length === 0 ? (
-          <EmptyState isError={isError} />
+          <EmptyState isError={activeQuery.isError} isLive={mode === 'live'} />
         ) : (
           <div className="cards-grid">
             {fixtures.map((fixture, index) => (
@@ -446,8 +488,9 @@ function Dashboard() {
         <div>
           <BarChart3 aria-hidden="true" />
           <span>
-            Identidade dos jogos fornecida pela API-Football. Probabilidades,
-            odds, estatísticas, minuto e placar são simulações.
+            Jogos fornecidos pela API-Football. Probabilidades, odds,
+            estatísticas e sinais são simulações; minuto e placar são reais na
+            secção Ao Vivo.
           </span>
         </div>
       </footer>

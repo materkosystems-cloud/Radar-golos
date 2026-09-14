@@ -31,7 +31,7 @@ paths:
       operationId: getTodayFixtures
       tags: [fixtures]
       summary: Get today's football fixtures
-      description: Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 15 minutes and returns the last valid response when an upstream refresh fails.
+      description: Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 2 hours and returns the last valid response when an upstream refresh fails.
       responses:
         "200":
           description: Today's fixtures and cache status
@@ -41,6 +41,25 @@ paths:
                 $ref: "#/components/schemas/TodayFixturesResponse"
         "503":
           description: No real fixture data is available yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixturesUnavailable"
+  /fixtures/live:
+    get:
+      operationId: getLiveFixtures
+      tags: [fixtures]
+      summary: Get genuinely live football fixtures
+      description: Returns only fixtures currently in progress from API-Football. The upstream list is refreshed at most once every 20 minutes.
+      responses:
+        "200":
+          description: Current live fixtures and cache status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveFixturesResponse"
+        "503":
+          description: No valid live-fixture response is available
           content:
             application/json:
               schema:
@@ -103,6 +122,44 @@ components:
       required:
         - fixtures
         - date
+        - fetchedAt
+        - nextRefreshAt
+        - stale
+        - warning
+    LiveFixture:
+      allOf:
+        - $ref: "#/components/schemas/Fixture"
+        - type: object
+          properties:
+            minute:
+              type: integer
+            homeScore:
+              type: integer
+            awayScore:
+              type: integer
+          required:
+            - minute
+            - homeScore
+            - awayScore
+    LiveFixturesResponse:
+      type: object
+      properties:
+        fixtures:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveFixture"
+        fetchedAt:
+          type: string
+          format: date-time
+        nextRefreshAt:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+        warning:
+          type: ["string", "null"]
+      required:
+        - fixtures
         - fetchedAt
         - nextRefreshAt
         - stale

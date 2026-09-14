@@ -18,7 +18,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 15 minutes and returns the last valid response when an upstream refresh fails.
+ * Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 2 hours and returns the last valid response when an upstream refresh fails.
  * @summary Get today's football fixtures
  */
 export const GetTodayFixturesResponse = zod.object({
@@ -32,6 +32,31 @@ export const GetTodayFixturesResponse = zod.object({
   "status": zod.string()
 })),
   "date": zod.coerce.date(),
+  "fetchedAt": zod.coerce.date(),
+  "nextRefreshAt": zod.coerce.date(),
+  "stale": zod.boolean(),
+  "warning": zod.string().nullable()
+})
+
+
+/**
+ * Returns only fixtures currently in progress from API-Football. The upstream list is refreshed at most once every 20 minutes.
+ * @summary Get genuinely live football fixtures
+ */
+export const GetLiveFixturesResponse = zod.object({
+  "fixtures": zod.array(zod.object({
+  "id": zod.number().int(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "league": zod.string(),
+  "country": zod.string(),
+  "kickoff": zod.coerce.date(),
+  "status": zod.string()
+}).and(zod.object({
+  "minute": zod.number().int(),
+  "homeScore": zod.number().int(),
+  "awayScore": zod.number().int()
+}))),
   "fetchedAt": zod.coerce.date(),
   "nextRefreshAt": zod.coerce.date(),
   "stale": zod.boolean(),
