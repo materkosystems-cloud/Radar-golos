@@ -42,7 +42,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const TWO_HOURS = 2 * 60 * 60 * 1000;
-const ONE_MINUTE = 60 * 1000;
+const TWENTY_MINUTES = 20 * 60 * 1000;
 const HIGH_EDGE_THRESHOLD = 30;
 const HIGH_PROB_THRESHOLD = 70;
 const TOP_OPPORTUNITIES_LIMIT = 18;
@@ -785,8 +785,8 @@ function Dashboard() {
   const liveQuery = useGetLiveFixtures({
     query: {
       queryKey: getGetLiveFixturesQueryKey(),
-      staleTime: ONE_MINUTE,
-      refetchInterval: mode === 'live' ? ONE_MINUTE : false,
+      staleTime: TWENTY_MINUTES,
+      refetchInterval: mode === 'live' ? TWENTY_MINUTES : false,
     },
   });
   const historyQuery = useGetSignalHistory({
@@ -814,6 +814,12 @@ function Dashboard() {
   }, [mode]);
 
   useEffect(() => {
+    if (liveQuery.data) {
+      console.log('[Ao Vivo filtro por data]', {
+        beforeFilter: liveQuery.data.sourceCount,
+        afterFilter: liveQuery.data.liveCount,
+      });
+    }
     for (const fixture of liveQuery.data?.fixtures ?? []) {
       console.log('[Ao Vivo minuto: API → interface]', {
         fixtureId: fixture.id,
@@ -821,7 +827,7 @@ function Dashboard() {
         interfaceMinute: fixture.minute,
       });
     }
-  }, [liveQuery.data?.fixtures]);
+  }, [liveQuery.data]);
 
   useEffect(() => {
     window.localStorage.setItem(

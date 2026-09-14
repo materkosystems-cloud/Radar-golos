@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import {
   GetLiveFixturesResponse,
   GetTodayFixturesResponse,
@@ -9,7 +11,11 @@ const router: IRouter = Router();
 
 const API_FOOTBALL_URL = "https://v3.football.api-sports.io/fixtures";
 const TODAY_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
-const LIVE_CACHE_TTL_MS = 60 * 1000;
+const LIVE_CACHE_TTL_MS = 20 * 60 * 1000;
+const LIVE_CACHE_FILE = path.resolve(
+  import.meta.dirname,
+  "../data/live-fixtures-cache.json",
+);
 const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "BT", "P", "LIVE"]);
 
 type ApiFootballFixture = {
@@ -76,6 +82,8 @@ type TodayFixtureCache = {
 };
 
 type LiveFixtureCache = {
+  sourceCount: number;
+  liveCount: number;
   fixtures: NormalizedLiveFixture[];
   fetchedAt: Date;
   nextRefreshAt: Date;
@@ -85,6 +93,41 @@ let todayCache: TodayFixtureCache | null = null;
 let todayRefreshPromise: Promise<TodayFixtureCache> | null = null;
 let liveCache: LiveFixtureCache | null = null;
 let liveRefreshPromise: Promise<LiveFixtureCache> | null = null;
+let liveCacheLoaded = false;
+let liveCacheIsFallback = false;
+
+async function loadLiveCache() {
+  if (liveCacheLoaded) return;
+  liveCacheLoaded = true;
+  try {
+    const parsed = JSON.parse(
+      await fs.readFile(LIVE_CACHE_FILE, "utf8"),
+    ) as LiveFixtureCache;
+    if (Array.isArray(parsed.fixtures) && parsed.fetchedAt) {
+      liveCache = {
+        sourceCount: parsed.sourceCount ?? parsed.fixtures.length,
+        liveCount: parsed.liveCount ?? parsed.fixtures.length,
+        fixtures: parsed.fixtures.map((fixture) => ({
+          ...fixture,
+          kickoff: new Date(fixture.kickoff),
+        })),
+        fetchedAt: new Date(parsed.fetchedAt),
+        nextRefreshAt: new Date(parsed.nextRefreshAt),
+      };
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn("[Ao Vivo] Não foi possível carregar o cache persistente");
+    }
+  }
+}
+
+async function saveLiveCache(cache: LiveFixtureCache) {
+  await fs.mkdir(path.dirname(LIVE_CACHE_FILE), { recursive: true });
+  const temporaryFile = `${LIVE_CACHE_FILE}.tmp`;
+  await fs.writeFile(temporaryFile, JSON.stringify(cache), "utf8");
+  await fs.rename(temporaryFile, LIVE_CACHE_FILE);
+}
 
 function getServerDate(date = new Date()): string {
   const year = date.getFullYear();
@@ -222,14 +265,22 @@ async function fetchTodayFixtures(date: string): Promise<TodayFixtureCache> {
 
 async function fetchLiveFixtures(): Promise<LiveFixtureCache> {
   const currentServerDate = getServerDate();
-  const response = await fetchApiFootball("live=all");
+  const response = await fetchApiFootball(`date=${currentServerDate}`);
   await resolveSignalsFromFixtures(response);
   const fixtures = response
     .map((fixture) => normalizeLiveFixture(fixture, currentServerDate))
     .filter((fixture): fixture is NormalizedLiveFixture => fixture !== null);
+  console.log("[Ao Vivo filtro por data]", {
+    date: currentServerDate,
+    beforeFilter: response.length,
+    afterFilter: fixtures.length,
+    allowedStatuses: [...LIVE_STATUSES],
+  });
   const fetchedAt = new Date();
 
   return {
+    sourceCount: response.length,
+    liveCount: fixtures.length,
     fixtures,
     fetchedAt,
     nextRefreshAt: new Date(fetchedAt.getTime() + LIVE_CACHE_TTL_MS),
@@ -283,14 +334,25 @@ async function getTodayFixtures(
 async function getLiveFixtures(
   log: (obj: object, msg: string) => void,
 ) {
+  await loadLiveCache();
   if (liveCache && liveCache.nextRefreshAt.getTime() > Date.now()) {
-    return { data: liveCache, stale: false, warning: null };
+    return {
+      data: liveCache,
+      stale: liveCacheIsFallback,
+      warning: liveCacheIsFallback
+        ? "não foi possível atualizar os jogos ao vivo — usando última lista válida"
+        : null,
+    };
   }
 
   if (!liveRefreshPromise) {
     liveRefreshPromise = fetchLiveFixtures()
       .then((freshCache) => {
         liveCache = freshCache;
+        liveCacheIsFallback = false;
+        void saveLiveCache(freshCache).catch((error) => {
+          log({ err: error }, "Unable to persist live fixture cache");
+        });
         return freshCache;
       })
       .finally(() => {
@@ -302,18 +364,40 @@ async function getLiveFixtures(
     const freshCache = await liveRefreshPromise;
     return { data: freshCache, stale: false, warning: null };
   } catch (error) {
+    console.log("[Ao Vivo filtro por data]", {
+      date: getServerDate(),
+      beforeFilter: 0,
+      afterFilter: 0,
+      upstreamError: true,
+      allowedStatuses: [...LIVE_STATUSES],
+    });
     log(
       { err: error },
       "Unable to refresh live fixtures; returning an empty safe state",
     );
 
+    if (liveCache) {
+      liveCacheIsFallback = true;
+      liveCache.nextRefreshAt = new Date(Date.now() + LIVE_CACHE_TTL_MS);
+      return {
+        data: liveCache,
+        stale: true,
+        warning:
+          "não foi possível atualizar os jogos ao vivo — usando última lista válida",
+      };
+    }
+
     const fetchedAt = new Date();
+    liveCache = {
+      sourceCount: 0,
+      liveCount: 0,
+      fixtures: [],
+      fetchedAt,
+      nextRefreshAt: new Date(fetchedAt.getTime() + LIVE_CACHE_TTL_MS),
+    };
+    liveCacheIsFallback = true;
     return {
-      data: {
-        fixtures: [],
-        fetchedAt,
-        nextRefreshAt: new Date(fetchedAt.getTime() + LIVE_CACHE_TTL_MS),
-      },
+      data: liveCache,
       stale: true,
       warning:
         "não foi possível atualizar os jogos ao vivo — nova tentativa em 20 minutos",
@@ -363,6 +447,8 @@ router.get("/fixtures/live", async (req, res) => {
     );
 
     const data = GetLiveFixturesResponse.parse({
+      sourceCount: result.data.sourceCount,
+      liveCount: result.data.liveCount,
       fixtures: result.data.fixtures,
       fetchedAt: result.data.fetchedAt,
       nextRefreshAt: result.data.nextRefreshAt,

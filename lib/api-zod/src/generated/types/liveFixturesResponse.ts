@@ -8,6 +8,8 @@
 import type { LiveFixture } from './liveFixture';
 
 export interface LiveFixturesResponse {
+  sourceCount: number;
+  liveCount: number;
   fixtures: LiveFixture[];
   fetchedAt: Date;
   nextRefreshAt: Date;

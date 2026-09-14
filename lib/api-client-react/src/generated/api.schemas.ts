@@ -37,6 +37,8 @@ export type LiveFixture = Fixture & {
 };
 
 export interface LiveFixturesResponse {
+  sourceCount: number;
+  liveCount: number;
   fixtures: LiveFixture[];
   fetchedAt: string;
   nextRefreshAt: string;

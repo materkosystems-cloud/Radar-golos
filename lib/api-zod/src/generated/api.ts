@@ -44,6 +44,8 @@ export const GetTodayFixturesResponse = zod.object({
  * @summary Get genuinely live football fixtures
  */
 export const GetLiveFixturesResponse = zod.object({
+  "sourceCount": zod.number().int(),
+  "liveCount": zod.number().int(),
   "fixtures": zod.array(zod.object({
   "id": zod.number().int(),
   "homeTeam": zod.string(),
