@@ -1,0 +1,22 @@
+{
+  "name": "Radar de Golos",
+  "short_name": "Radar",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#07110d",
+  "background_color": "#07110d",
+  "icons": [
+    {
+      "src": "/icons/radar-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/radar-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
