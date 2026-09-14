@@ -343,6 +343,46 @@ main {
   width: 16px;
 }
 
+.league-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.league-tabs button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #9aaa9f;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.league-tabs button:hover {
+  color: #d3ded6;
+  border-color: rgba(101, 228, 147, 0.45);
+}
+
+.league-tabs button.active {
+  color: #07110d;
+  border-color: #65e493;
+  background: #65e493;
+  box-shadow: 0 6px 18px rgba(66, 205, 118, 0.16);
+}
+
+.league-tabs button:active {
+  transform: scale(0.98);
+}
+
 .section-heading {
   display: flex;
   align-items: center;
@@ -1424,6 +1464,26 @@ footer svg {
 
   .mode-tabs svg {
     width: 14px;
+  }
+
+  .league-tabs {
+    gap: 6px;
+    margin-top: 14px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .league-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .league-tabs button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding-inline: 12px;
+    font-size: 10px;
   }
 
   .section-heading {

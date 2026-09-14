@@ -820,8 +820,27 @@ function LocalDateTime() {
   );
 }
 
+function sortLeagueOptions(options: LeagueOption[]) {
+  return [...options].sort((left, right) => {
+    const leftName = left.name.toLowerCase();
+    const rightName = right.name.toLowerCase();
+    const leftIsBrazil = leftName.includes('brasileir');
+    const rightIsBrazil = rightName.includes('brasileir');
+    if (leftIsBrazil !== rightIsBrazil) return leftIsBrazil ? -1 : 1;
+
+    const leftIsPremier = leftName === 'premier league';
+    const rightIsPremier = rightName === 'premier league';
+    if (leftIsPremier !== rightIsPremier) return leftIsPremier ? -1 : 1;
+
+    return left.name.localeCompare(right.name, 'pt', {
+      sensitivity: 'base',
+    });
+  });
+}
+
 function Dashboard() {
   const [mode, setMode] = useState<ViewMode>('full');
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<FavoriteMatch[]>(loadFavorites);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
     () =>
@@ -1029,13 +1048,7 @@ function Dashboard() {
       ]),
     [liveQuery.data?.fixtures, todayQuery.data?.fixtures],
   );
-  const displayItems = useMemo<
-    Array<{
-      fixture: Fixture | LiveFixture;
-      analysisMode: MarketMode;
-      isArchived: boolean;
-    }>
-  >(
+  const baseDisplayItems = useMemo<DisplayItem[]>(
     () => {
       if (mode === 'history') return [];
       if (mode === 'favorites') {
@@ -1091,6 +1104,52 @@ function Dashboard() {
       todayQuery.data?.fixtures,
     ],
   );
+  const leagueOptions = useMemo<LeagueOption[]>(() => {
+    if (
+      mode === 'favorites' ||
+      mode === 'history' ||
+      baseDisplayItems.length === 0
+    ) {
+      return [];
+    }
+
+    const byName = new Map<string, LeagueOption>();
+    for (const item of baseDisplayItems) {
+      const key = item.fixture.league.toLocaleLowerCase('pt');
+      if (!byName.has(key)) {
+        byName.set(key, {
+          name: item.fixture.league,
+          country: item.fixture.country,
+        });
+      }
+    }
+    return sortLeagueOptions([...byName.values()]);
+  }, [baseDisplayItems, mode]);
+  const activeLeague =
+    mode === 'favorites' || mode === 'history'
+      ? null
+      : selectedLeague &&
+          leagueOptions.some((league) => league.name === selectedLeague)
+        ? selectedLeague
+        : leagueOptions[0]?.name ?? null;
+  const displayItems = useMemo(
+    () =>
+      activeLeague
+        ? baseDisplayItems.filter(
+            (item) => item.fixture.league === activeLeague,
+          )
+        : baseDisplayItems,
+    [activeLeague, baseDisplayItems],
+  );
+
+  useEffect(() => {
+    if (mode === 'favorites' || mode === 'history') {
+      setSelectedLeague(null);
+      return;
+    }
+    setSelectedLeague(leagueOptions[0]?.name ?? null);
+  }, [leagueOptions, mode]);
+
   const rankedFixtures = useMemo(
     () => {
       const ranked = displayItems
@@ -1273,7 +1332,10 @@ function Dashboard() {
                 type="button"
                 key={item}
                 className={mode === item ? 'active' : undefined}
-                onClick={() => setMode(item)}
+                onClick={() => {
+                  setMode(item);
+                  setSelectedLeague(null);
+                }}
                 aria-pressed={mode === item}
               >
                 <Icon aria-hidden="true" />
@@ -1282,6 +1344,22 @@ function Dashboard() {
             );
           })}
         </nav>
+
+        {mode !== 'favorites' && mode !== 'history' && (
+          <nav className="league-tabs" aria-label="Filtrar por liga">
+            {leagueOptions.map((league) => (
+              <button
+                type="button"
+                key={league.name}
+                className={activeLeague === league.name ? 'active' : undefined}
+                onClick={() => setSelectedLeague(league.name)}
+                aria-pressed={activeLeague === league.name}
+              >
+                {league.name}
+              </button>
+            ))}
+          </nav>
+        )}
 
         <section className="section-heading">
           <div className="section-icon">
