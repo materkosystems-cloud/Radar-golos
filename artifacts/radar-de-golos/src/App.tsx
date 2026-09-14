@@ -83,6 +83,17 @@ type FavoriteMatch = {
   savedAt: string;
 };
 
+type DisplayItem = {
+  fixture: Fixture | LiveFixture;
+  analysisMode: MarketMode;
+  isArchived: boolean;
+};
+
+type LeagueOption = {
+  name: string;
+  country: string;
+};
+
 const FAVORITES_STORAGE_KEY = 'radar-de-golos:favorites';
 const NOTIFICATIONS_STORAGE_KEY = 'radar-de-golos:notifications-enabled';
 
