@@ -101,3 +101,45 @@ export const UpdateFavoriteIdsResponse = zod.object({
 })
 
 
+/**
+ * @summary Register featured signals for the first time
+ */
+export const RegisterFeaturedSignalsBody = zod.object({
+  "signals": zod.array(zod.object({
+  "fixtureId": zod.number().int(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "market": zod.enum(['full', 'firstHalf', 'live']),
+  "line": zod.string(),
+  "edge": zod.number(),
+  "probability": zod.number().int()
+}))
+})
+
+export const RegisterFeaturedSignalsResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Get resolved and pending featured signals
+ */
+export const GetSignalHistoryResponse = zod.object({
+  "signals": zod.array(zod.object({
+  "fixtureId": zod.number().int(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "market": zod.enum(['full', 'firstHalf', 'live']),
+  "line": zod.string(),
+  "edge": zod.number(),
+  "probability": zod.number().int()
+}).and(zod.object({
+  "id": zod.string(),
+  "recordedAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullable(),
+  "outcome": zod.union([zod.literal('hit'),zod.literal('miss'),zod.literal(null)]).nullable(),
+  "realResult": zod.string().nullable()
+})))
+})
+
+

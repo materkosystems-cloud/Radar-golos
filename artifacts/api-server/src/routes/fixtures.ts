@@ -3,6 +3,7 @@ import {
   GetLiveFixturesResponse,
   GetTodayFixturesResponse,
 } from "@workspace/api-zod";
+import { resolveSignalsFromFixtures } from "./history";
 
 const router: IRouter = Router();
 
@@ -32,6 +33,16 @@ type ApiFootballFixture = {
   goals?: {
     home?: number | null;
     away?: number | null;
+  };
+  score?: {
+    halftime?: {
+      home?: number | null;
+      away?: number | null;
+    };
+    fulltime?: {
+      home?: number | null;
+      away?: number | null;
+    };
   };
 };
 
@@ -180,6 +191,7 @@ async function fetchApiFootball(query: string): Promise<ApiFootballFixture[]> {
 
 async function fetchTodayFixtures(date: string): Promise<TodayFixtureCache> {
   const response = await fetchApiFootball(`date=${date}`);
+  await resolveSignalsFromFixtures(response);
   const fixtures = response
     .map(normalizeFixture)
     .filter((fixture): fixture is NormalizedFixture => fixture !== null);
@@ -196,6 +208,7 @@ async function fetchTodayFixtures(date: string): Promise<TodayFixtureCache> {
 async function fetchLiveFixtures(): Promise<LiveFixtureCache> {
   const currentServerDate = getServerDate();
   const response = await fetchApiFootball("live=all");
+  await resolveSignalsFromFixtures(response);
   const fixtures = response
     .map((fixture) => normalizeLiveFixture(fixture, currentServerDate))
     .filter((fixture): fixture is NormalizedLiveFixture => fixture !== null);

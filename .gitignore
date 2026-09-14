@@ -50,3 +50,4 @@ Thumbs.db
 
 # Runtime push subscriptions and notification history
 /artifacts/api-server/data/push-state.json
+/artifacts/api-server/data/signal-history.json

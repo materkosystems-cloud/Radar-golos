@@ -69,6 +69,55 @@ export interface FavoriteIdsRequest {
   fixtureIds: number[];
 }
 
+export type SignalMarket = typeof SignalMarket[keyof typeof SignalMarket];
+
+
+export const SignalMarket = {
+  full: 'full',
+  firstHalf: 'firstHalf',
+  live: 'live',
+} as const;
+
+export interface SignalRegistration {
+  fixtureId: number;
+  homeTeam: string;
+  awayTeam: string;
+  market: SignalMarket;
+  line: string;
+  edge: number;
+  probability: number;
+}
+
+export interface RegisterSignalsRequest {
+  signals: SignalRegistration[];
+}
+
+/**
+ * @nullable
+ */
+export type SignalHistoryItemOutcome = typeof SignalHistoryItemOutcome[keyof typeof SignalHistoryItemOutcome] | null;
+
+
+export const SignalHistoryItemOutcome = {
+  hit: 'hit',
+  miss: 'miss',
+} as const;
+
+export type SignalHistoryItem = SignalRegistration & ({
+  id: string;
+  recordedAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  outcome: SignalHistoryItemOutcome;
+  /** @nullable */
+  realResult: string | null;
+});
+
+export interface SignalHistoryResponse {
+  signals: SignalHistoryItem[];
+}
+
 export interface SuccessResponse {
   ok: boolean;
 }

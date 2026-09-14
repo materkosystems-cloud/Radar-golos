@@ -14,6 +14,8 @@ tags:
     description: Real football fixtures with simulated analysis data
   - name: push
     description: Web Push subscriptions and favorite fixture monitoring
+  - name: history
+    description: Featured signal accuracy history
 paths:
   /healthz:
     get:
@@ -114,6 +116,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+  /signals:
+    post:
+      operationId: registerFeaturedSignals
+      tags: [history]
+      summary: Register featured signals for the first time
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterSignalsRequest"
+      responses:
+        "200":
+          description: Signals registered without replacing previous records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /history:
+    get:
+      operationId: getSignalHistory
+      tags: [history]
+      summary: Get resolved and pending featured signals
+      responses:
+        "200":
+          description: Persistent featured signal history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignalHistoryResponse"
 components:
   schemas:
     HealthStatus:
@@ -263,6 +295,82 @@ components:
             type: integer
       required:
         - fixtureIds
+    SignalMarket:
+      type: string
+      enum:
+        - full
+        - firstHalf
+        - live
+    SignalRegistration:
+      type: object
+      properties:
+        fixtureId:
+          type: integer
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          $ref: "#/components/schemas/SignalMarket"
+        line:
+          type: string
+        edge:
+          type: number
+        probability:
+          type: integer
+      required:
+        - fixtureId
+        - homeTeam
+        - awayTeam
+        - market
+        - line
+        - edge
+        - probability
+    RegisterSignalsRequest:
+      type: object
+      properties:
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalRegistration"
+      required:
+        - signals
+    SignalHistoryItem:
+      allOf:
+        - $ref: "#/components/schemas/SignalRegistration"
+        - type: object
+          properties:
+            id:
+              type: string
+            recordedAt:
+              type: string
+              format: date-time
+            resolvedAt:
+              type: ["string", "null"]
+              format: date-time
+            outcome:
+              type: ["string", "null"]
+              enum:
+                - hit
+                - miss
+                - null
+            realResult:
+              type: ["string", "null"]
+          required:
+            - id
+            - recordedAt
+            - resolvedAt
+            - outcome
+            - realResult
+    SignalHistoryResponse:
+      type: object
+      properties:
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignalHistoryItem"
+      required:
+        - signals
     SuccessResponse:
       type: object
       properties:

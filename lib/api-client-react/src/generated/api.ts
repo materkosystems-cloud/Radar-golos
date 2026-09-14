@@ -25,6 +25,8 @@ import type {
   HealthStatus,
   LiveFixturesResponse,
   PushSubscription,
+  RegisterSignalsRequest,
+  SignalHistoryResponse,
   SuccessResponse,
   TodayFixturesResponse,
   VapidPublicKeyResponse
@@ -543,4 +545,169 @@ export const useUpdateFavoriteIds = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateFavoriteIdsMutationOptions(options));
     }
+
+export const getRegisterFeaturedSignalsUrl = () => {
+
+
+
+
+  return `/api/signals`
+}
+
+/**
+ * @summary Register featured signals for the first time
+ */
+export const registerFeaturedSignals = async (registerSignalsRequest: RegisterSignalsRequest, options?: Parameters<typeof customFetch>[1]): Promise<SuccessResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SuccessResponse>(getRegisterFeaturedSignalsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(registerSignalsRequest)
+  }
+);}
+
+
+
+
+
+export const getRegisterFeaturedSignalsMutationKey = () => ['registerFeaturedSignals'] as const;
+
+export const getRegisterFeaturedSignalsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerFeaturedSignals>>, TError,RegisterFeaturedSignalsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerFeaturedSignals>>, TError,RegisterFeaturedSignalsMutationVariables, TContext> => {
+
+const mutationKey = getRegisterFeaturedSignalsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerFeaturedSignals>>, RegisterFeaturedSignalsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerFeaturedSignals(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterFeaturedSignalsMutationResult = NonNullable<Awaited<ReturnType<typeof registerFeaturedSignals>>>
+    export type RegisterFeaturedSignalsMutationBody = BodyType<RegisterSignalsRequest>
+    export type RegisterFeaturedSignalsMutationError = ErrorType<unknown>
+    export type RegisterFeaturedSignalsMutationVariables = {data: BodyType<RegisterSignalsRequest>}
+
+    /**
+ * @summary Register featured signals for the first time
+ */
+export const useRegisterFeaturedSignals = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerFeaturedSignals>>, TError,RegisterFeaturedSignalsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerFeaturedSignals>>,
+        TError,
+        RegisterFeaturedSignalsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRegisterFeaturedSignalsMutationOptions(options));
+    }
+
+export const getGetSignalHistoryUrl = () => {
+
+
+
+
+  return `/api/history`
+}
+
+/**
+ * @summary Get resolved and pending featured signals
+ */
+export const getSignalHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<SignalHistoryResponse> => {
+
+  return customFetch<SignalHistoryResponse>(getGetSignalHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSignalHistoryQueryKey = () => {
+    return [
+    `/api/history`
+    ] as const;
+    }
+
+
+export const getGetSignalHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getSignalHistory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSignalHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSignalHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSignalHistory>>> = ({ signal }) => getSignalHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSignalHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSignalHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getSignalHistory>>>
+export type GetSignalHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get resolved and pending featured signals
+ */
+
+export function useGetSignalHistory<TData = Awaited<ReturnType<typeof getSignalHistory>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSignalHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSignalHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 

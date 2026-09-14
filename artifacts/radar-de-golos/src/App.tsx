@@ -6,8 +6,10 @@ import {
   Bell,
   BellRing,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   Clock3,
+  History,
   Goal,
   Radio,
   RefreshCw,
@@ -17,18 +19,23 @@ import {
   TimerReset,
   Trophy,
   X,
+  XCircle,
 } from 'lucide-react';
 import {
+  getGetSignalHistoryQueryKey,
   getGetLiveFixturesQueryKey,
   getGetTodayFixturesQueryKey,
   getGetVapidPublicKeyQueryKey,
   useGetLiveFixtures,
+  useGetSignalHistory,
   useGetVapidPublicKey,
   useSubscribePush,
   useGetTodayFixtures,
+  useRegisterFeaturedSignals,
   useUpdateFavoriteIds,
   type Fixture,
   type LiveFixture,
+  type SignalHistoryItem,
 } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -68,7 +75,7 @@ type SelectedMatch = {
   markets: SimulatedAnalysis[];
 };
 
-type ViewMode = MarketMode | 'opportunities' | 'favorites';
+type ViewMode = MarketMode | 'opportunities' | 'favorites' | 'history';
 
 type FavoriteMatch = {
   fixture: Fixture | LiveFixture;
@@ -118,7 +125,26 @@ const modeConfig: Record<
     description: 'Jogos guardados neste dispositivo',
     icon: Star,
   },
+  history: {
+    label: 'Histórico',
+    shortLabel: 'Histórico',
+    description: 'Acertividade dos sinais comparada com resultados reais',
+    icon: History,
+  },
 };
+
+const TERMINAL_FIXTURE_STATUSES = new Set([
+  'FT',
+  'AET',
+  'PEN',
+  'CANC',
+  'ABD',
+  'PST',
+  'SUSP',
+  'INT',
+  'AWD',
+  'WO',
+]);
 
 function seededValue(seed: number, offset: number): number {
   const value = Math.sin(seed * 12.9898 + offset * 78.233) * 43758.5453;
@@ -605,6 +631,135 @@ function LoadingState() {
   );
 }
 
+function marketLabel(market: MarketMode): string {
+  return modeConfig[market].label;
+}
+
+function AccuracyMetric({
+  label,
+  signals,
+}: {
+  label: string;
+  signals: SignalHistoryItem[];
+}) {
+  const hits = signals.filter((signal) => signal.outcome === 'hit').length;
+  const percentage =
+    signals.length > 0 ? Math.round((hits / signals.length) * 100) : 0;
+  return (
+    <div className="accuracy-metric">
+      <span>{label}</span>
+      <strong>{signals.length > 0 ? `${percentage}%` : '—'}</strong>
+      <small>
+        {signals.length > 0
+          ? `${hits} de ${signals.length} sinais resolvidos`
+          : 'Sem sinais resolvidos'}
+      </small>
+    </div>
+  );
+}
+
+function HistoryView({
+  signals,
+  isLoading,
+  isError,
+}: {
+  signals: SignalHistoryItem[];
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  if (isLoading) return <LoadingState />;
+  if (isError) {
+    return (
+      <div className="empty-state">
+        <h2>Não foi possível carregar o histórico</h2>
+        <p>Tente novamente dentro de alguns instantes.</p>
+      </div>
+    );
+  }
+
+  const pending = signals.filter((signal) => signal.outcome === null);
+  const resolved = signals
+    .filter((signal) => signal.outcome !== null)
+    .sort(
+      (left, right) =>
+        new Date(right.resolvedAt ?? 0).getTime() -
+        new Date(left.resolvedAt ?? 0).getTime(),
+    );
+
+  return (
+    <div className="history-content">
+      <div className="history-warning">
+        Sinal simulado comparado com resultado real do jogo — amostra ainda
+        pequena, não é garantia de desempenho futuro.
+      </div>
+      <div className="accuracy-grid">
+        <AccuracyMetric label="Geral" signals={resolved} />
+        {(['full', 'firstHalf', 'live'] as MarketMode[]).map((market) => (
+          <AccuracyMetric
+            key={market}
+            label={marketLabel(market)}
+            signals={resolved.filter((signal) => signal.market === market)}
+          />
+        ))}
+      </div>
+      <div className="pending-summary" data-testid="history-pending-count">
+        <Clock3 aria-hidden="true" />
+        <strong>{pending.length}</strong>{' '}
+        {pending.length === 1 ? 'sinal pendente' : 'sinais pendentes'}
+      </div>
+      {resolved.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon">
+            <History aria-hidden="true" />
+          </div>
+          <h2>Ainda não existem sinais resolvidos</h2>
+          <p>Os resultados aparecem aqui quando os jogos terminarem.</p>
+        </div>
+      ) : (
+        <div className="history-list">
+          {resolved.map((signal) => (
+            <article
+              className={`history-row ${signal.outcome}`}
+              key={signal.id}
+            >
+              <div className="history-outcome">
+                {signal.outcome === 'hit' ? (
+                  <CheckCircle2 aria-hidden="true" />
+                ) : (
+                  <XCircle aria-hidden="true" />
+                )}
+              </div>
+              <div className="history-match">
+                <span>{marketLabel(signal.market)}</span>
+                <h3>
+                  {signal.homeTeam} <small>vs</small> {signal.awayTeam}
+                </h3>
+                <time dateTime={signal.resolvedAt ?? undefined}>
+                  {signal.resolvedAt
+                    ? new Intl.DateTimeFormat('pt-PT', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(new Date(signal.resolvedAt))
+                    : ''}
+                </time>
+              </div>
+              <div className="history-result">
+                <span>{signal.line}</span>
+                <strong>{signal.realResult}</strong>
+                <small>
+                  Edge +{signal.edge.toFixed(1)}% · {signal.probability}%
+                </small>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard() {
   const [mode, setMode] = useState<ViewMode>('full');
   const [favorites, setFavorites] = useState<FavoriteMatch[]>(loadFavorites);
@@ -634,6 +789,13 @@ function Dashboard() {
       refetchInterval: TWENTY_MINUTES,
     },
   });
+  const historyQuery = useGetSignalHistory({
+    query: {
+      queryKey: getGetSignalHistoryQueryKey(),
+      enabled: mode === 'history',
+      staleTime: 60_000,
+    },
+  });
   const vapidQuery = useGetVapidPublicKey({
     query: {
       queryKey: getGetVapidPublicKeyQueryKey(),
@@ -643,6 +805,7 @@ function Dashboard() {
   });
   const subscribePushMutation = useSubscribePush();
   const updateFavoriteIdsMutation = useUpdateFavoriteIds();
+  const registerSignalsMutation = useRegisterFeaturedSignals();
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -650,6 +813,47 @@ function Dashboard() {
       JSON.stringify(favorites),
     );
   }, [favorites]);
+
+  useEffect(() => {
+    const registrations = [
+      ...(todayQuery.data?.fixtures ?? []).flatMap((fixture) =>
+        (['full', 'firstHalf'] as MarketMode[]).map((market) => ({
+          fixture,
+          market,
+          analysis: buildMarketSignals(fixture.id, market)[0],
+        })),
+      ),
+      ...(liveQuery.data?.fixtures ?? []).map((fixture) => ({
+        fixture,
+        market: 'live' as const,
+        analysis: buildMarketSignals(fixture.id, 'live')[0],
+      })),
+    ]
+      .filter(
+        ({ fixture, analysis }) =>
+          !TERMINAL_FIXTURE_STATUSES.has(fixture.status) &&
+          isFeaturedSignal(analysis),
+      )
+      .map(({ fixture, market, analysis }) => ({
+        fixtureId: fixture.id,
+        homeTeam: fixture.homeTeam,
+        awayTeam: fixture.awayTeam,
+        market,
+        line: analysis.line,
+        edge: analysis.edge,
+        probability: analysis.probability,
+      }));
+
+    if (registrations.length === 0) return;
+    void registerSignalsMutation
+      .mutateAsync({ data: { signals: registrations } })
+      .then(() =>
+        queryClient.invalidateQueries({
+          queryKey: getGetSignalHistoryQueryKey(),
+        }),
+      )
+      .catch(() => undefined);
+  }, [liveQuery.data?.fixtures, todayQuery.data?.fixtures]);
 
   useEffect(() => {
     void updateFavoriteIdsMutation
@@ -738,6 +942,7 @@ function Dashboard() {
     }>
   >(
     () => {
+      if (mode === 'history') return [];
       if (mode === 'favorites') {
         return favorites.map((favorite) => ({
           fixture: favorite.fixture,
@@ -834,23 +1039,33 @@ function Dashboard() {
     [displayItems, mode],
   );
   const displayDate =
-    mode === 'live' || mode === 'favorites' || mode === 'opportunities'
+    mode === 'live' ||
+    mode === 'favorites' ||
+    mode === 'opportunities' ||
+    mode === 'history'
       ? undefined
       : todayQuery.data?.date;
   const ModeIcon = modeConfig[mode].icon;
   const isLoading =
-    mode === 'favorites'
+    mode === 'history'
+      ? historyQuery.isLoading
+      : mode === 'favorites'
       ? false
       : mode === 'opportunities'
         ? todayQuery.isLoading || liveQuery.isLoading
         : activeQuery.isLoading;
   const isError =
-    mode === 'favorites'
+    mode === 'history'
+      ? historyQuery.isError
+      : mode === 'favorites'
       ? false
       : mode === 'opportunities'
         ? todayQuery.isError && liveQuery.isError
         : activeQuery.isError;
   const fixtureCount = rankedFixtures.length;
+  const historySignals = historyQuery.data?.signals ?? [];
+  const displayCount =
+    mode === 'history' ? historySignals.length : fixtureCount;
 
   const toggleFavorite = (
     fixture: Fixture | LiveFixture,
@@ -933,13 +1148,16 @@ function Dashboard() {
         <section className="data-notice" aria-label="Informação dos dados">
           <ShieldCheck aria-hidden="true" />
           <p>
-            {mode === 'live'
+            {mode === 'history'
+              ? 'Resultados reais usados apenas para medir sinais simulados já registados'
+              : mode === 'live'
               ? '⚠️ Jogos, minuto e placar reais · Estatísticas, odds e sinais continuam simulados'
               : '⚠️ Jogos reais de hoje · Odds e estatísticas ainda simuladas — versão de teste'}
           </p>
         </section>
 
-        {(activeQuery.data?.stale || activeQuery.data?.warning) && (
+        {mode !== 'history' &&
+          (activeQuery.data?.stale || activeQuery.data?.warning) && (
           <div className="cache-warning" role="status">
             <RefreshCw aria-hidden="true" />
             <span>
@@ -947,7 +1165,7 @@ function Dashboard() {
                 'não foi possível atualizar os jogos — usando última lista válida'}
             </span>
           </div>
-        )}
+          )}
 
         <nav className="mode-tabs" aria-label="Período de análise">
           {(Object.keys(modeConfig) as ViewMode[]).map((item) => {
@@ -972,13 +1190,24 @@ function Dashboard() {
             <ModeIcon aria-hidden="true" />
           </div>
           <div>
-            <span>Análise simulada</span>
+            <span>
+              {mode === 'history'
+                ? 'Desempenho observado'
+                : 'Análise simulada'}
+            </span>
             <h2>{modeConfig[mode].label}</h2>
             <p>{modeConfig[mode].description}</p>
           </div>
           <div className="section-pill">
             <Sparkles aria-hidden="true" />
-            {fixtureCount} {fixtureCount === 1 ? 'jogo' : 'jogos'}
+            {displayCount}{' '}
+            {mode === 'history'
+              ? displayCount === 1
+                ? 'sinal'
+                : 'sinais'
+              : displayCount === 1
+                ? 'jogo'
+                : 'jogos'}
           </div>
         </section>
 
@@ -1017,7 +1246,13 @@ function Dashboard() {
           </div>
         )}
 
-        {isLoading ? (
+        {mode === 'history' ? (
+          <HistoryView
+            signals={historySignals}
+            isLoading={isLoading}
+            isError={isError}
+          />
+        ) : isLoading ? (
           <LoadingState />
         ) : fixtureCount === 0 ? (
           mode === 'favorites' ? (
