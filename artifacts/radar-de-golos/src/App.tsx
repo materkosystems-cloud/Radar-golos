@@ -303,7 +303,7 @@ function EmptyState({
       </div>
       <h2>
         {isLive && !isError
-          ? 'Nenhum jogo ao vivo no momento — atualizando a cada 20 minutos'
+          ? 'Nenhum jogo ao vivo neste momento — a atualizar automaticamente'
           : isError
           ? 'Não foi possível carregar os jogos'
           : 'Sem jogos disponíveis para hoje'}
@@ -418,7 +418,7 @@ function Dashboard() {
           <ShieldCheck aria-hidden="true" />
           <p>
             {mode === 'live'
-              ? '⚠️ Jogos reais ao vivo (quando disponíveis) · Estatísticas e probabilidade ainda simuladas'
+              ? '⚠️ Jogos, minuto e placar reais · Estatísticas, odds e sinais continuam simulados'
               : '⚠️ Jogos reais de hoje · Odds e estatísticas ainda simuladas — versão de teste'}
           </p>
         </section>
