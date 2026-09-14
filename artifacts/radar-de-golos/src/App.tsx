@@ -585,10 +585,15 @@ function MatchDetailModal({
 function EmptyState({
   isError,
   isLive,
+  warning,
 }: {
   isError: boolean;
   isLive: boolean;
+  warning?: string | null;
 }) {
+  const isQuotaExhausted =
+    warning === 'Quota diária esgotada, aguarde amanhã';
+
   return (
     <div className="empty-state">
       <div className="empty-icon">
@@ -599,14 +604,18 @@ function EmptyState({
         )}
       </div>
       <h2>
-        {isLive && !isError
+        {isQuotaExhausted
+          ? 'Quota diária esgotada, aguarde amanhã'
+          : isLive && !isError
           ? 'Nenhum jogo ao vivo neste momento — a atualizar automaticamente'
           : isError
           ? 'Não foi possível carregar os jogos'
           : 'Sem jogos disponíveis para hoje'}
       </h2>
       <p>
-        {isLive && !isError
+        {isQuotaExhausted
+          ? 'A API-Football recusou o pedido com o status HTTP 429.'
+          : isLive && !isError
           ? 'A lista é verificada novamente a cada 20 minutos.'
           : isError
           ? 'A ligação aos dados reais falhou e ainda não existe uma lista válida em cache.'
@@ -1286,7 +1295,11 @@ function Dashboard() {
               <p>Use a estrela num card para o guardar neste dispositivo.</p>
             </div>
           ) : (
-            <EmptyState isError={isError} isLive={mode === 'live'} />
+            <EmptyState
+              isError={isError}
+              isLive={mode === 'live'}
+              warning={activeQuery.data?.warning}
+            />
           )
         ) : (
           <div className="cards-grid">

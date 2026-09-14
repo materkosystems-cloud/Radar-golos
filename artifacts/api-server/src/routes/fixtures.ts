@@ -57,6 +57,16 @@ type ApiFootballResponse = {
   errors?: Record<string, unknown> | string[];
 };
 
+class ApiFootballError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiFootballError";
+  }
+}
+
 type NormalizedFixture = {
   id: number;
   homeTeam: string;
@@ -95,6 +105,8 @@ let liveCache: LiveFixtureCache | null = null;
 let liveRefreshPromise: Promise<LiveFixtureCache> | null = null;
 let liveCacheLoaded = false;
 let liveCacheIsFallback = false;
+let liveFallbackWarning =
+  "não foi possível atualizar os jogos ao vivo — usando última lista válida";
 
 async function loadLiveCache() {
   if (liveCacheLoaded) return;
@@ -228,12 +240,33 @@ async function fetchApiFootball(query: string): Promise<ApiFootballFixture[]> {
       "x-apisports-key": apiKey,
     },
   });
+  const rawResponse = await response.text();
+  const quotaIndicatedByBody =
+    /request limit for the day|daily quota|quota.*exhausted/i.test(rawResponse);
+  console.log("[API-Football diagnóstico]", {
+    query,
+    date: new URLSearchParams(query).get("date"),
+    statusHttp: response.status,
+    quotaIndicatedByBody,
+    rawResponseFirst500: rawResponse.slice(0, 500),
+  });
 
   if (!response.ok) {
-    throw new Error(`API-Football returned HTTP ${response.status}`);
+    throw new ApiFootballError(
+      `API-Football returned HTTP ${response.status}`,
+      response.status,
+    );
   }
 
-  const payload = (await response.json()) as ApiFootballResponse;
+  let payload: ApiFootballResponse;
+  try {
+    payload = JSON.parse(rawResponse) as ApiFootballResponse;
+  } catch {
+    throw new ApiFootballError(
+      "API-Football returned invalid JSON",
+      response.status,
+    );
+  }
   const hasErrors =
     payload.errors &&
     (Array.isArray(payload.errors)
@@ -241,7 +274,10 @@ async function fetchApiFootball(query: string): Promise<ApiFootballFixture[]> {
       : Object.keys(payload.errors).length > 0);
 
   if (hasErrors) {
-    throw new Error("API-Football returned an error response");
+    throw new ApiFootballError(
+      "API-Football returned an error response",
+      quotaIndicatedByBody ? 429 : response.status,
+    );
   }
 
   return payload.response ?? [];
@@ -264,7 +300,11 @@ async function fetchTodayFixtures(date: string): Promise<TodayFixtureCache> {
 }
 
 async function fetchLiveFixtures(): Promise<LiveFixtureCache> {
-  const currentServerDate = getServerDate();
+  const currentServerDate = new Date().toISOString().split("T")[0];
+  console.log("[API-Football data da query]", {
+    date: currentServerDate,
+    systemDateIso: new Date().toISOString(),
+  });
   const response = await fetchApiFootball(`date=${currentServerDate}`);
   await resolveSignalsFromFixtures(response);
   const fixtures = response
@@ -314,6 +354,8 @@ async function getTodayFixtures(
     const freshCache = await todayRefreshPromise;
     return { data: freshCache, stale: false, warning: null };
   } catch (error) {
+    const quotaExhausted =
+      error instanceof ApiFootballError && error.status === 429;
     log(
       { err: error, date },
       "Unable to refresh today's fixtures; checking last valid cache",
@@ -323,7 +365,9 @@ async function getTodayFixtures(
       return {
         data: todayCache,
         stale: true,
-        warning: "não foi possível atualizar os jogos — usando última lista válida",
+        warning: quotaExhausted
+          ? "Quota diária esgotada, aguarde amanhã"
+          : "não foi possível atualizar os jogos — usando última lista válida",
       };
     }
 
@@ -339,9 +383,7 @@ async function getLiveFixtures(
     return {
       data: liveCache,
       stale: liveCacheIsFallback,
-      warning: liveCacheIsFallback
-        ? "não foi possível atualizar os jogos ao vivo — usando última lista válida"
-        : null,
+      warning: liveCacheIsFallback ? liveFallbackWarning : null,
     };
   }
 
@@ -364,11 +406,19 @@ async function getLiveFixtures(
     const freshCache = await liveRefreshPromise;
     return { data: freshCache, stale: false, warning: null };
   } catch (error) {
+    const quotaExhausted =
+      error instanceof ApiFootballError && error.status === 429;
+    liveFallbackWarning = quotaExhausted
+      ? "Quota diária esgotada, aguarde amanhã"
+      : "não foi possível atualizar os jogos ao vivo — usando última lista válida";
     console.log("[Ao Vivo filtro por data]", {
       date: getServerDate(),
       beforeFilter: 0,
       afterFilter: 0,
       upstreamError: true,
+      upstreamStatus:
+        error instanceof ApiFootballError ? error.status : undefined,
+      quotaExhausted,
       allowedStatuses: [...LIVE_STATUSES],
     });
     log(
@@ -382,8 +432,7 @@ async function getLiveFixtures(
       return {
         data: liveCache,
         stale: true,
-        warning:
-          "não foi possível atualizar os jogos ao vivo — usando última lista válida",
+        warning: liveFallbackWarning,
       };
     }
 
@@ -399,8 +448,9 @@ async function getLiveFixtures(
     return {
       data: liveCache,
       stale: true,
-      warning:
-        "não foi possível atualizar os jogos ao vivo — nova tentativa em 20 minutos",
+      warning: quotaExhausted
+        ? "Quota diária esgotada, aguarde amanhã"
+        : "não foi possível atualizar os jogos ao vivo — nova tentativa em 20 minutos",
     };
   }
 }
@@ -413,7 +463,11 @@ export async function getLiveFixturesForNotifications(
 }
 
 router.get("/fixtures/today", async (req, res) => {
-  const date = getServerDate();
+  const date = new Date().toISOString().split("T")[0];
+  console.log("[API-Football data da query]", {
+    date,
+    systemDateIso: new Date().toISOString(),
+  });
 
   try {
     const result = await getTodayFixtures(date, (obj, message) =>
@@ -429,10 +483,22 @@ router.get("/fixtures/today", async (req, res) => {
       warning: result.warning,
     });
 
-    res.json(data);
+    return res.json(data);
   } catch (error) {
     req.log.error({ err: error, date }, "Today's fixtures are unavailable");
-    res.status(503).json({
+    if (error instanceof ApiFootballError && error.status === 429) {
+      return res.json(
+        GetTodayFixturesResponse.parse({
+          fixtures: [],
+          date,
+          fetchedAt: new Date(),
+          nextRefreshAt: new Date(Date.now() + LIVE_CACHE_TTL_MS),
+          stale: true,
+          warning: "Quota diária esgotada, aguarde amanhã",
+        }),
+      );
+    }
+    return res.status(503).json({
       error: "fixtures_unavailable",
       warning:
         "não foi possível carregar os jogos reais de hoje — tente novamente mais tarde",
