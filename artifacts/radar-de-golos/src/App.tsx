@@ -146,6 +146,17 @@ function formatFixtureDate(value: string): string {
   return `${String(date.getDate()).padStart(2, '0')} ${monthNames[date.getMonth()]}`;
 }
 
+function isCurrentSystemDate(value: string): boolean {
+  const fixtureDate = new Date(value);
+  const currentDate = new Date();
+
+  return (
+    fixtureDate.getFullYear() === currentDate.getFullYear() &&
+    fixtureDate.getMonth() === currentDate.getMonth() &&
+    fixtureDate.getDate() === currentDate.getDate()
+  );
+}
+
 function formatDate(value?: string): string {
   if (!value) return 'Hoje';
   return new Intl.DateTimeFormat('pt-PT', {
@@ -354,7 +365,9 @@ function Dashboard() {
   const activeQuery = mode === 'live' ? liveQuery : todayQuery;
   const fixtures =
     mode === 'live'
-      ? (liveQuery.data?.fixtures ?? [])
+      ? (liveQuery.data?.fixtures ?? []).filter((fixture) =>
+          isCurrentSystemDate(fixture.kickoff),
+        )
       : (todayQuery.data?.fixtures ?? []);
   const displayDate =
     mode === 'live' ? undefined : todayQuery.data?.date;
