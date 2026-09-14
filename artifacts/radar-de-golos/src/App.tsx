@@ -30,7 +30,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 const TWO_HOURS = 2 * 60 * 60 * 1000;
 const TWENTY_MINUTES = 20 * 60 * 1000;
-const HIGH_EDGE_THRESHOLD = 25;
+const HIGH_EDGE_THRESHOLD = 30;
 const HIGH_PROB_THRESHOLD = 70;
 
 const queryClient = new QueryClient({
@@ -162,9 +162,9 @@ function buildMarketSignals(
 
 function isFeaturedSignal(analysis: SimulatedAnalysis): boolean {
   return (
-    (analysis.edge >= HIGH_EDGE_THRESHOLD &&
-      analysis.confidence === 'Alta') ||
-    analysis.probability >= HIGH_PROB_THRESHOLD
+    analysis.confidence === 'Alta' &&
+    (analysis.edge >= HIGH_EDGE_THRESHOLD ||
+      analysis.probability >= HIGH_PROB_THRESHOLD)
   );
 }
 
