@@ -769,6 +769,46 @@ function HistoryView({
   );
 }
 
+function LocalDateTime() {
+  const [now, setNow] = useState(() => new Date());
+  const monthNames = [
+    'Jan',
+    'Fev',
+    'Mar',
+    'Abr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Set',
+    'Out',
+    'Nov',
+    'Dez',
+  ];
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const time = now.toLocaleTimeString('pt-PT', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const date = `${String(now.getDate()).padStart(2, '0')} ${
+    monthNames[now.getMonth()]
+  } ${now.getFullYear()}`;
+
+  return (
+    <time className="local-date-time" dateTime={now.toISOString()}>
+      <span>{time}</span>
+      <span>{date}</span>
+    </time>
+  );
+}
+
 function Dashboard() {
   const [mode, setMode] = useState<ViewMode>('full');
   const [favorites, setFavorites] = useState<FavoriteMatch[]>(loadFavorites);
@@ -1127,8 +1167,11 @@ function Dashboard() {
           </span>
         </a>
         <div className="topbar-status">
-          <span className="status-dot" aria-hidden="true" />
-          Dados reais ativos
+          <div className="status-label">
+            <span className="status-dot" aria-hidden="true" />
+            <span className="status-copy">Dados reais ativos</span>
+          </div>
+          <LocalDateTime />
         </div>
       </header>
 

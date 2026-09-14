@@ -103,11 +103,29 @@ button {
 
 .topbar-status {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
   color: #9dad9f;
   font-size: 12px;
   font-weight: 700;
+}
+
+.status-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.local-date-time {
+  display: flex;
+  gap: 7px;
+  color: #91a096;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .status-dot,
@@ -1342,11 +1360,20 @@ footer svg {
   }
 
   .topbar-status {
-    font-size: 0;
+    gap: 2px;
   }
 
-  .topbar-status::after {
+  .status-copy {
+    display: none;
+  }
+
+  .status-label::after {
     content: 'Ativo';
+    font-size: 10px;
+  }
+
+  .local-date-time {
+    gap: 5px;
     font-size: 10px;
   }
 
