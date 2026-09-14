@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: fixtures
+    description: Real football fixtures with simulated analysis data
 paths:
   /healthz:
     get:
@@ -24,6 +26,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /fixtures/today:
+    get:
+      operationId: getTodayFixtures
+      tags: [fixtures]
+      summary: Get today's football fixtures
+      description: Returns today's fixtures from API-Football. The server refreshes the upstream data at most once every 15 minutes and returns the last valid response when an upstream refresh fails.
+      responses:
+        "200":
+          description: Today's fixtures and cache status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodayFixturesResponse"
+        "503":
+          description: No real fixture data is available yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FixturesUnavailable"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +54,67 @@ components:
           type: string
       required:
         - status
+    Fixture:
+      type: object
+      properties:
+        id:
+          type: integer
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        league:
+          type: string
+        country:
+          type: string
+        kickoff:
+          type: string
+          format: date-time
+        status:
+          type: string
+      required:
+        - id
+        - homeTeam
+        - awayTeam
+        - league
+        - country
+        - kickoff
+        - status
+    TodayFixturesResponse:
+      type: object
+      properties:
+        fixtures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fixture"
+        date:
+          type: string
+          format: date
+        fetchedAt:
+          type: string
+          format: date-time
+        nextRefreshAt:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+        warning:
+          type: ["string", "null"]
+      required:
+        - fixtures
+        - date
+        - fetchedAt
+        - nextRefreshAt
+        - stale
+        - warning
+    FixturesUnavailable:
+      type: object
+      properties:
+        error:
+          type: string
+        warning:
+          type: string
+      required:
+        - error
+        - warning
 

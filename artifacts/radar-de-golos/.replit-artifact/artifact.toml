@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Radar de Golos"
+description = "Aplicação mobile-first para analisar oportunidades simuladas no mercado over/under golos, agora com a identidade real dos jogos de hoje obtida pela API-Football."
+version = "1.0.0"
+id = "artifacts/radar-de-golos"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19070
+
+[services.development]
+run = "pnpm --filter @workspace/radar-de-golos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/radar-de-golos", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/radar-de-golos/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19070"
+BASE_PATH = "/"

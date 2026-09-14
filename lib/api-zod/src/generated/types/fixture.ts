@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
+export interface Fixture {
+  id: number;
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  country: string;
+  kickoff: Date;
   status: string;
 }
