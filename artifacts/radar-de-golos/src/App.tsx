@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Star,
   TimerReset,
   Trophy,
   X,
@@ -60,8 +61,18 @@ type SelectedMatch = {
   markets: SimulatedAnalysis[];
 };
 
+type ViewMode = MarketMode | 'favorites';
+
+type FavoriteMatch = {
+  fixture: Fixture | LiveFixture;
+  mode: MarketMode;
+  savedAt: string;
+};
+
+const FAVORITES_STORAGE_KEY = 'radar-de-golos:favorites';
+
 const modeConfig: Record<
-  MarketMode,
+  ViewMode,
   {
     label: string;
     shortLabel: string;
@@ -86,6 +97,12 @@ const modeConfig: Record<
     shortLabel: 'Ao Vivo',
     description: 'Minuto e placar reais dos jogos atualmente em disputa',
     icon: Radio,
+  },
+  favorites: {
+    label: 'Favoritos',
+    shortLabel: 'Favoritos',
+    description: 'Jogos guardados neste dispositivo',
+    icon: Star,
   },
 };
 
@@ -145,10 +162,22 @@ function buildMarketSignals(
 
 function isFeaturedSignal(analysis: SimulatedAnalysis): boolean {
   return (
-    analysis.edge >= HIGH_EDGE_THRESHOLD &&
-    (analysis.confidence === 'Alta' ||
-      analysis.probability >= HIGH_PROB_THRESHOLD)
+    (analysis.edge >= HIGH_EDGE_THRESHOLD &&
+      analysis.confidence === 'Alta') ||
+    analysis.probability >= HIGH_PROB_THRESHOLD
   );
+}
+
+function loadFavorites(): FavoriteMatch[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const value = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+    if (!value) return [];
+    const parsed = JSON.parse(value) as FavoriteMatch[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function formatKickoff(value: string): string {
@@ -235,6 +264,9 @@ function MatchCard({
   analysis,
   isFeatured,
   onOpen,
+  isFavorite,
+  onToggleFavorite,
+  isArchived,
 }: {
   fixture: Fixture | LiveFixture;
   mode: MarketMode;
@@ -242,6 +274,9 @@ function MatchCard({
   analysis: SimulatedAnalysis;
   isFeatured: boolean;
   onOpen: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+  isArchived?: boolean;
 }) {
   const liveFixture = mode === 'live' ? (fixture as LiveFixture) : null;
 
@@ -260,10 +295,32 @@ function MatchCard({
       }}
       data-testid={`card-match-${fixture.id}`}
     >
-      {isFeatured && (
-        <div className="featured-signal-badge">
-          <Sparkles aria-hidden="true" />
-          Sinal em Destaque
+      <button
+        className={`favorite-button${isFavorite ? ' is-favorite' : ''}`}
+        type="button"
+        aria-label={
+          isFavorite ? 'Remover jogo dos favoritos' : 'Adicionar jogo aos favoritos'
+        }
+        aria-pressed={isFavorite}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleFavorite();
+        }}
+        data-testid={`button-favorite-${fixture.id}`}
+      >
+        <Star aria-hidden="true" fill={isFavorite ? 'currentColor' : 'none'} />
+      </button>
+      {(isFeatured || isArchived) && (
+        <div className="card-status-badges">
+          {isFeatured && (
+            <div className="featured-signal-badge">
+              <Sparkles aria-hidden="true" />
+              Sinal em Destaque
+            </div>
+          )}
+          {isArchived && (
+            <div className="archived-match-badge">Jogo terminado</div>
+          )}
         </div>
       )}
       <div className="match-card-top">
@@ -517,7 +574,8 @@ function LoadingState() {
 }
 
 function Dashboard() {
-  const [mode, setMode] = useState<MarketMode>('full');
+  const [mode, setMode] = useState<ViewMode>('full');
+  const [favorites, setFavorites] = useState<FavoriteMatch[]>(loadFavorites);
   const [selectedMatch, setSelectedMatch] = useState<SelectedMatch | null>(
     null,
   );
@@ -536,26 +594,70 @@ function Dashboard() {
     },
   });
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      FAVORITES_STORAGE_KEY,
+      JSON.stringify(favorites),
+    );
+  }, [favorites]);
+
   const activeQuery = mode === 'live' ? liveQuery : todayQuery;
-  const fixtures = useMemo<Array<Fixture | LiveFixture>>(
+  const currentFixtureIds = useMemo(
     () =>
-      mode === 'live'
+      new Set([
+        ...(todayQuery.data?.fixtures ?? []).map((fixture) => fixture.id),
+        ...(liveQuery.data?.fixtures ?? []).map((fixture) => fixture.id),
+      ]),
+    [liveQuery.data?.fixtures, todayQuery.data?.fixtures],
+  );
+  const displayItems = useMemo<
+    Array<{
+      fixture: Fixture | LiveFixture;
+      analysisMode: MarketMode;
+      isArchived: boolean;
+    }>
+  >(
+    () => {
+      if (mode === 'favorites') {
+        return favorites.map((favorite) => ({
+          fixture: favorite.fixture,
+          analysisMode: favorite.mode,
+          isArchived: !currentFixtureIds.has(favorite.fixture.id),
+        }));
+      }
+
+      const fixtures =
+        mode === 'live'
         ? (liveQuery.data?.fixtures ?? []).filter((fixture) =>
             isCurrentSystemDate(fixture.kickoff),
           )
-        : (todayQuery.data?.fixtures ?? []),
-    [liveQuery.data?.fixtures, mode, todayQuery.data?.fixtures],
+        : (todayQuery.data?.fixtures ?? []);
+      return fixtures.map((fixture) => ({
+        fixture,
+        analysisMode: mode,
+        isArchived: false,
+      }));
+    },
+    [
+      currentFixtureIds,
+      favorites,
+      liveQuery.data?.fixtures,
+      mode,
+      todayQuery.data?.fixtures,
+    ],
   );
   const rankedFixtures = useMemo(
     () =>
-      fixtures
-        .map((fixture, originalIndex) => {
-          const markets = buildMarketSignals(fixture.id, mode);
+      displayItems
+        .map(({ fixture, analysisMode, isArchived }, originalIndex) => {
+          const markets = buildMarketSignals(fixture.id, analysisMode);
           const analysis = markets[0];
           return {
             fixture,
+            analysisMode,
             analysis,
             markets,
+            isArchived,
             isFeatured: isFeaturedSignal(analysis),
             originalIndex,
           };
@@ -569,11 +671,30 @@ function Dashboard() {
           }
           return left.originalIndex - right.originalIndex;
         }),
-    [fixtures, mode],
+    [displayItems],
   );
   const displayDate =
-    mode === 'live' ? undefined : todayQuery.data?.date;
+    mode === 'live' || mode === 'favorites' ? undefined : todayQuery.data?.date;
   const ModeIcon = modeConfig[mode].icon;
+  const isLoading = mode === 'favorites' ? false : activeQuery.isLoading;
+  const isError = mode === 'favorites' ? false : activeQuery.isError;
+  const fixtureCount = rankedFixtures.length;
+
+  const toggleFavorite = (
+    fixture: Fixture | LiveFixture,
+    analysisMode: MarketMode,
+  ) => {
+    setFavorites((current) => {
+      const exists = current.some((favorite) => favorite.fixture.id === fixture.id);
+      if (exists) {
+        return current.filter((favorite) => favorite.fixture.id !== fixture.id);
+      }
+      return [
+        ...current,
+        { fixture, mode: analysisMode, savedAt: new Date().toISOString() },
+      ];
+    });
+  };
 
   return (
     <div className="app-shell">
@@ -609,7 +730,7 @@ function Dashboard() {
           <div className="hero-summary">
             <div>
               <span>Jogos encontrados</span>
-              <strong>{activeQuery.isLoading ? '—' : fixtures.length}</strong>
+              <strong>{isLoading ? '—' : fixtureCount}</strong>
             </div>
             <div>
               <span>Última lista</span>
@@ -617,8 +738,10 @@ function Dashboard() {
             </div>
             <button
               type="button"
-              onClick={() => void activeQuery.refetch()}
-              disabled={activeQuery.isFetching}
+              onClick={() => {
+                if (mode !== 'favorites') void activeQuery.refetch();
+              }}
+              disabled={mode === 'favorites' || activeQuery.isFetching}
               aria-label="Verificar lista em cache"
             >
               <RefreshCw
@@ -649,7 +772,7 @@ function Dashboard() {
         )}
 
         <nav className="mode-tabs" aria-label="Período de análise">
-          {(Object.keys(modeConfig) as MarketMode[]).map((item) => {
+          {(Object.keys(modeConfig) as ViewMode[]).map((item) => {
             const Icon = modeConfig[item].icon;
             return (
               <button
@@ -677,25 +800,58 @@ function Dashboard() {
           </div>
           <div className="section-pill">
             <Sparkles aria-hidden="true" />
-            {fixtures.length} {fixtures.length === 1 ? 'jogo' : 'jogos'}
+            {fixtureCount} {fixtureCount === 1 ? 'jogo' : 'jogos'}
           </div>
         </section>
 
-        {activeQuery.isLoading ? (
+        {isLoading ? (
           <LoadingState />
-        ) : fixtures.length === 0 ? (
-          <EmptyState isError={activeQuery.isError} isLive={mode === 'live'} />
+        ) : fixtureCount === 0 ? (
+          mode === 'favorites' ? (
+            <div className="empty-state" data-testid="status-empty-favorites">
+              <div className="empty-icon">
+                <Star aria-hidden="true" />
+              </div>
+              <h2>Ainda não existem jogos favoritos</h2>
+              <p>Use a estrela num card para o guardar neste dispositivo.</p>
+            </div>
+          ) : (
+            <EmptyState isError={isError} isLive={mode === 'live'} />
+          )
         ) : (
           <div className="cards-grid">
             {rankedFixtures.map(
-              ({ fixture, analysis, markets, isFeatured }, index) => (
+              (
+                {
+                  fixture,
+                  analysisMode,
+                  analysis,
+                  markets,
+                  isFeatured,
+                  isArchived,
+                },
+                index,
+              ) => (
               <MatchCard
                 fixture={fixture}
-                mode={mode}
+                mode={analysisMode}
                 index={index}
                 analysis={analysis}
                 isFeatured={isFeatured}
-                onOpen={() => setSelectedMatch({ fixture, mode, markets })}
+                isArchived={isArchived}
+                isFavorite={favorites.some(
+                  (favorite) => favorite.fixture.id === fixture.id,
+                )}
+                onToggleFavorite={() =>
+                  toggleFavorite(fixture, analysisMode)
+                }
+                onOpen={() =>
+                  setSelectedMatch({
+                    fixture,
+                    mode: analysisMode,
+                    markets,
+                  })
+                }
                 key={`${mode}-${fixture.id}`}
               />
               ),

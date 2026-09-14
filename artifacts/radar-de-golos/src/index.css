@@ -461,6 +461,63 @@ main {
   text-transform: uppercase;
 }
 
+.card-status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding-right: 34px;
+}
+
+.card-status-badges .featured-signal-badge {
+  margin-bottom: 14px;
+}
+
+.archived-match-badge {
+  align-self: flex-start;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #89968e;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.favorite-button {
+  position: absolute;
+  z-index: 3;
+  top: 15px;
+  right: 15px;
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  color: #748179;
+  background: rgba(6, 15, 10, 0.88);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.favorite-button:hover,
+.favorite-button.is-favorite {
+  border-color: rgba(245, 184, 64, 0.34);
+  color: #f5bf52;
+  background: rgba(245, 184, 64, 0.09);
+}
+
+.favorite-button svg {
+  width: 15px;
+  height: 15px;
+}
+
 .featured-signal-badge svg {
   width: 12px;
   height: 12px;
