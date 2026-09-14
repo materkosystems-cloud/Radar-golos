@@ -32,6 +32,7 @@ const TWO_HOURS = 2 * 60 * 60 * 1000;
 const TWENTY_MINUTES = 20 * 60 * 1000;
 const HIGH_EDGE_THRESHOLD = 30;
 const HIGH_PROB_THRESHOLD = 70;
+const TOP_OPPORTUNITIES_LIMIT = 18;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,7 +62,7 @@ type SelectedMatch = {
   markets: SimulatedAnalysis[];
 };
 
-type ViewMode = MarketMode | 'favorites';
+type ViewMode = MarketMode | 'opportunities' | 'favorites';
 
 type FavoriteMatch = {
   fixture: Fixture | LiveFixture;
@@ -97,6 +98,12 @@ const modeConfig: Record<
     shortLabel: 'Ao Vivo',
     description: 'Minuto e placar reais dos jogos atualmente em disputa',
     icon: Radio,
+  },
+  opportunities: {
+    label: 'Melhores Oportunidades',
+    shortLabel: 'Melhores',
+    description: 'Top sinais de todas as secções, ordenados por edge',
+    icon: Sparkles,
   },
   favorites: {
     label: 'Favoritos',
@@ -267,6 +274,7 @@ function MatchCard({
   isFavorite,
   onToggleFavorite,
   isArchived,
+  sourceLabel,
 }: {
   fixture: Fixture | LiveFixture;
   mode: MarketMode;
@@ -277,6 +285,7 @@ function MatchCard({
   isFavorite: boolean;
   onToggleFavorite: () => void;
   isArchived?: boolean;
+  sourceLabel?: string;
 }) {
   const liveFixture = mode === 'live' ? (fixture as LiveFixture) : null;
 
@@ -321,6 +330,11 @@ function MatchCard({
           {isArchived && (
             <div className="archived-match-badge">Jogo terminado</div>
           )}
+        </div>
+      )}
+      {sourceLabel && (
+        <div className="opportunity-source-badge">
+          Origem: {sourceLabel}
         </div>
       )}
       <div className="match-card-top">
@@ -626,6 +640,31 @@ function Dashboard() {
         }));
       }
 
+      if (mode === 'opportunities') {
+        const todayFixtures = todayQuery.data?.fixtures ?? [];
+        const liveFixtures = (liveQuery.data?.fixtures ?? []).filter((fixture) =>
+          isCurrentSystemDate(fixture.kickoff),
+        );
+
+        return [
+          ...todayFixtures.map((fixture) => ({
+            fixture,
+            analysisMode: 'full' as const,
+            isArchived: false,
+          })),
+          ...todayFixtures.map((fixture) => ({
+            fixture,
+            analysisMode: 'firstHalf' as const,
+            isArchived: false,
+          })),
+          ...liveFixtures.map((fixture) => ({
+            fixture,
+            analysisMode: 'live' as const,
+            isArchived: false,
+          })),
+        ];
+      }
+
       const fixtures =
         mode === 'live'
         ? (liveQuery.data?.fixtures ?? []).filter((fixture) =>
@@ -647,8 +686,8 @@ function Dashboard() {
     ],
   );
   const rankedFixtures = useMemo(
-    () =>
-      displayItems
+    () => {
+      const ranked = displayItems
         .map(({ fixture, analysisMode, isArchived }, originalIndex) => {
           const markets = buildMarketSignals(fixture.id, analysisMode);
           const analysis = markets[0];
@@ -663,6 +702,16 @@ function Dashboard() {
           };
         })
         .sort((left, right) => {
+          if (mode === 'opportunities') {
+            const edgeDifference =
+              right.analysis.edge - left.analysis.edge;
+            if (edgeDifference !== 0) return edgeDifference;
+            if (left.analysis.confidence !== right.analysis.confidence) {
+              if (left.analysis.confidence === 'Alta') return -1;
+              if (right.analysis.confidence === 'Alta') return 1;
+            }
+            return left.originalIndex - right.originalIndex;
+          }
           if (left.isFeatured !== right.isFeatured) {
             return left.isFeatured ? -1 : 1;
           }
@@ -670,14 +719,31 @@ function Dashboard() {
             return right.analysis.edge - left.analysis.edge;
           }
           return left.originalIndex - right.originalIndex;
-        }),
-    [displayItems],
+        });
+
+      return mode === 'opportunities'
+        ? ranked.slice(0, TOP_OPPORTUNITIES_LIMIT)
+        : ranked;
+    },
+    [displayItems, mode],
   );
   const displayDate =
-    mode === 'live' || mode === 'favorites' ? undefined : todayQuery.data?.date;
+    mode === 'live' || mode === 'favorites' || mode === 'opportunities'
+      ? undefined
+      : todayQuery.data?.date;
   const ModeIcon = modeConfig[mode].icon;
-  const isLoading = mode === 'favorites' ? false : activeQuery.isLoading;
-  const isError = mode === 'favorites' ? false : activeQuery.isError;
+  const isLoading =
+    mode === 'favorites'
+      ? false
+      : mode === 'opportunities'
+        ? todayQuery.isLoading || liveQuery.isLoading
+        : activeQuery.isLoading;
+  const isError =
+    mode === 'favorites'
+      ? false
+      : mode === 'opportunities'
+        ? todayQuery.isError && liveQuery.isError
+        : activeQuery.isError;
   const fixtureCount = rankedFixtures.length;
 
   const toggleFavorite = (
@@ -739,9 +805,15 @@ function Dashboard() {
             <button
               type="button"
               onClick={() => {
-                if (mode !== 'favorites') void activeQuery.refetch();
+                if (mode !== 'favorites' && mode !== 'opportunities') {
+                  void activeQuery.refetch();
+                }
               }}
-              disabled={mode === 'favorites' || activeQuery.isFetching}
+              disabled={
+                mode === 'favorites' ||
+                mode === 'opportunities' ||
+                activeQuery.isFetching
+              }
               aria-label="Verificar lista em cache"
             >
               <RefreshCw
@@ -839,6 +911,11 @@ function Dashboard() {
                 analysis={analysis}
                 isFeatured={isFeatured}
                 isArchived={isArchived}
+                sourceLabel={
+                  mode === 'opportunities'
+                    ? modeConfig[analysisMode].label
+                    : undefined
+                }
                 isFavorite={favorites.some(
                   (favorite) => favorite.fixture.id === fixture.id,
                 )}
@@ -852,7 +929,7 @@ function Dashboard() {
                     markets,
                   })
                 }
-                key={`${mode}-${fixture.id}`}
+                key={`${mode}-${analysisMode}-${fixture.id}`}
               />
               ),
             )}
