@@ -192,14 +192,7 @@ function normalizeLiveFixture(
   currentServerDate: string,
 ): NormalizedLiveFixture | null {
   const fixture = normalizeFixture(item);
-  const elapsedMinute = item.fixture?.status?.elapsed;
-  const shortStatusMinute = Number(item.fixture?.status?.short);
-  const minute =
-    typeof elapsedMinute === "number"
-      ? elapsedMinute
-      : Number.isFinite(shortStatusMinute)
-        ? shortStatusMinute
-        : null;
+  const minute = item.fixture?.status?.elapsed;
   const homeScore = item.goals?.home;
   const awayScore = item.goals?.away;
 
@@ -207,7 +200,7 @@ function normalizeLiveFixture(
     !fixture ||
     !LIVE_STATUSES.has(fixture.status) ||
     getServerDate(fixture.kickoff) !== currentServerDate ||
-    minute === null ||
+    typeof minute !== "number" ||
     typeof homeScore !== "number" ||
     typeof awayScore !== "number"
   ) {
@@ -216,9 +209,23 @@ function normalizeLiveFixture(
 
   console.log("[Ao Vivo minuto: API → interface]", {
     fixtureId: fixture.id,
-    apiMinute: minute,
-    interfaceMinute: minute,
+    league: fixture.league,
+    country: fixture.country,
+    homeTeam: fixture.homeTeam,
+    awayTeam: fixture.awayTeam,
+    fixtureStatusElapsed: item.fixture?.status?.elapsed,
+    displayedMinute: minute,
   });
+  if (
+    fixture.country.toLowerCase() === "malta" &&
+    fixture.league.toLowerCase().includes("premier league")
+  ) {
+    console.log("[Premier League Malta minuto confirmado]", {
+      fixtureStatusElapsed: item.fixture?.status?.elapsed,
+      displayedMinute: minute,
+      valuesAreEqual: item.fixture?.status?.elapsed === minute,
+    });
+  }
 
   return {
     ...fixture,

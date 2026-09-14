@@ -872,9 +872,22 @@ function Dashboard() {
     for (const fixture of liveQuery.data?.fixtures ?? []) {
       console.log('[Ao Vivo minuto: API → interface]', {
         fixtureId: fixture.id,
-        apiMinute: fixture.apiMinute,
-        interfaceMinute: fixture.minute,
+        league: fixture.league,
+        country: fixture.country,
+        fixtureStatusElapsed: fixture.apiMinute,
+        displayedMinute: fixture.minute,
+        valuesAreEqual: fixture.apiMinute === fixture.minute,
       });
+      if (
+        fixture.country.toLowerCase() === 'malta' &&
+        fixture.league.toLowerCase().includes('premier league')
+      ) {
+        console.log('[Premier League Malta minuto confirmado]', {
+          fixtureStatusElapsed: fixture.apiMinute,
+          displayedMinute: fixture.minute,
+          valuesAreEqual: fixture.apiMinute === fixture.minute,
+        });
+      }
     }
   }, [liveQuery.data]);
 
