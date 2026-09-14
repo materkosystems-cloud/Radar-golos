@@ -28,6 +28,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 const TWO_HOURS = 2 * 60 * 60 * 1000;
 const TWENTY_MINUTES = 20 * 60 * 1000;
+const HIGH_EDGE_THRESHOLD = 25;
+const HIGH_PROB_THRESHOLD = 70;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -120,6 +122,14 @@ function buildSimulation(
   };
 }
 
+function isFeaturedSignal(analysis: SimulatedAnalysis): boolean {
+  return (
+    analysis.edge >= HIGH_EDGE_THRESHOLD &&
+    (analysis.confidence === 'Alta' ||
+      analysis.probability >= HIGH_PROB_THRESHOLD)
+  );
+}
+
 function formatKickoff(value: string): string {
   return new Intl.DateTimeFormat('pt-PT', {
     hour: '2-digit',
@@ -201,22 +211,28 @@ function MatchCard({
   fixture,
   mode,
   index,
+  analysis,
+  isFeatured,
 }: {
   fixture: Fixture | LiveFixture;
   mode: MarketMode;
   index: number;
+  analysis: SimulatedAnalysis;
+  isFeatured: boolean;
 }) {
-  const analysis = useMemo(
-    () => buildSimulation(fixture.id, mode),
-    [fixture.id, mode],
-  );
   const liveFixture = mode === 'live' ? (fixture as LiveFixture) : null;
 
   return (
     <article
-      className="match-card"
+      className={`match-card${isFeatured ? ' match-card-featured' : ''}`}
       style={{ animationDelay: `${Math.min(index, 12) * 45}ms` }}
     >
+      {isFeatured && (
+        <div className="featured-signal-badge">
+          <Sparkles aria-hidden="true" />
+          Sinal em Destaque
+        </div>
+      )}
       <div className="match-card-top">
         <div className="competition">
           <Trophy aria-hidden="true" />
@@ -363,12 +379,38 @@ function Dashboard() {
   });
 
   const activeQuery = mode === 'live' ? liveQuery : todayQuery;
-  const fixtures =
-    mode === 'live'
-      ? (liveQuery.data?.fixtures ?? []).filter((fixture) =>
-          isCurrentSystemDate(fixture.kickoff),
-        )
-      : (todayQuery.data?.fixtures ?? []);
+  const fixtures = useMemo<Array<Fixture | LiveFixture>>(
+    () =>
+      mode === 'live'
+        ? (liveQuery.data?.fixtures ?? []).filter((fixture) =>
+            isCurrentSystemDate(fixture.kickoff),
+          )
+        : (todayQuery.data?.fixtures ?? []),
+    [liveQuery.data?.fixtures, mode, todayQuery.data?.fixtures],
+  );
+  const rankedFixtures = useMemo(
+    () =>
+      fixtures
+        .map((fixture, originalIndex) => {
+          const analysis = buildSimulation(fixture.id, mode);
+          return {
+            fixture,
+            analysis,
+            isFeatured: isFeaturedSignal(analysis),
+            originalIndex,
+          };
+        })
+        .sort((left, right) => {
+          if (left.isFeatured !== right.isFeatured) {
+            return left.isFeatured ? -1 : 1;
+          }
+          if (left.isFeatured && right.isFeatured) {
+            return right.analysis.edge - left.analysis.edge;
+          }
+          return left.originalIndex - right.originalIndex;
+        }),
+    [fixtures, mode],
+  );
   const displayDate =
     mode === 'live' ? undefined : todayQuery.data?.date;
   const ModeIcon = modeConfig[mode].icon;
@@ -485,14 +527,18 @@ function Dashboard() {
           <EmptyState isError={activeQuery.isError} isLive={mode === 'live'} />
         ) : (
           <div className="cards-grid">
-            {fixtures.map((fixture, index) => (
+            {rankedFixtures.map(
+              ({ fixture, analysis, isFeatured }, index) => (
               <MatchCard
                 fixture={fixture}
                 mode={mode}
                 index={index}
+                analysis={analysis}
+                isFeatured={isFeatured}
                 key={`${mode}-${fixture.id}`}
               />
-            ))}
+              ),
+            )}
           </div>
         )}
       </main>

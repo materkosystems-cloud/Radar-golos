@@ -421,6 +421,45 @@ main {
   transform: translateY(-3px);
 }
 
+.match-card-featured {
+  border-color: rgba(245, 184, 64, 0.72);
+  background:
+    linear-gradient(145deg, rgba(245, 184, 64, 0.09), rgba(255, 255, 255, 0.018)),
+    #09140f;
+  box-shadow:
+    0 0 0 1px rgba(245, 184, 64, 0.08),
+    0 20px 58px rgba(0, 0, 0, 0.24);
+}
+
+.match-card-featured:hover {
+  border-color: rgba(245, 184, 64, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(245, 184, 64, 0.12),
+    0 24px 68px rgba(0, 0, 0, 0.3);
+}
+
+.featured-signal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 5px 9px;
+  border: 1px solid rgba(245, 184, 64, 0.3);
+  border-radius: 999px;
+  color: #f7c864;
+  background: rgba(245, 184, 64, 0.09);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.featured-signal-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
 @keyframes card-in {
   to {
     opacity: 1;
