@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Activity,
@@ -13,6 +13,7 @@ import {
   Sparkles,
   TimerReset,
   Trophy,
+  X,
 } from 'lucide-react';
 import {
   getGetLiveFixturesQueryKey,
@@ -50,6 +51,13 @@ type SimulatedAnalysis = {
   goalsAverage: number;
   form: number;
   confidence: 'Alta' | 'Média' | 'Baixa';
+  factors: string[];
+};
+
+type SelectedMatch = {
+  fixture: Fixture | LiveFixture;
+  mode: MarketMode;
+  markets: SimulatedAnalysis[];
 };
 
 const modeConfig: Record<
@@ -86,40 +94,53 @@ function seededValue(seed: number, offset: number): number {
   return value - Math.floor(value);
 }
 
-function buildSimulation(
+function buildMarketSignals(
   fixtureId: number,
   mode: MarketMode,
-): SimulatedAnalysis {
+): SimulatedAnalysis[] {
   const modeOffset = mode === 'full' ? 1 : mode === 'firstHalf' ? 7 : 13;
-  const probability = 54 + Math.round(seededValue(fixtureId, modeOffset) * 22);
-  const odds = 1.58 + seededValue(fixtureId, modeOffset + 1) * 0.74;
-  const marketProbability = 100 / odds;
-  const edge = Math.max(1.2, probability - marketProbability);
-  const confidence =
-    edge >= 10 ? 'Alta' : edge >= 6 ? 'Média' : ('Baixa' as const);
+  const lines =
+    mode === 'firstHalf'
+      ? ['Over 0.5 HT', 'Over 1.5 HT', 'Ambas marcam 1T']
+      : ['Over 1.5', 'Over 2.5', 'Over 3.5'];
 
-  return {
-    line:
-      mode === 'firstHalf'
-        ? seededValue(fixtureId, 19) > 0.5
-          ? 'Over 0.5 HT'
-          : 'Over 1.5 HT'
-        : seededValue(fixtureId, 21) > 0.42
-          ? 'Over 2.5'
-          : 'Over 3.5',
-    odds: Number(odds.toFixed(2)),
-    probability,
-    edge: Number(edge.toFixed(1)),
-    goalsAverage: Number(
-      (
-        (mode === 'firstHalf' ? 0.8 : 2.15) +
-        seededValue(fixtureId, modeOffset + 2) *
-          (mode === 'firstHalf' ? 1.1 : 2.0)
-      ).toFixed(2),
-    ),
-    form: 58 + Math.round(seededValue(fixtureId, modeOffset + 3) * 34),
-    confidence,
-  };
+  return lines
+    .map((line, index) => {
+      const offset = modeOffset + index * 11;
+      const probability =
+        48 + Math.round(seededValue(fixtureId, offset) * 28);
+      const odds = 1.52 + seededValue(fixtureId, offset + 1) * 1.02;
+      const marketProbability = 100 / odds;
+      const edge = Math.max(1.2, probability - marketProbability);
+      const goalsAverage = Number(
+        (
+          (mode === 'firstHalf' ? 0.8 : 2.15) +
+          seededValue(fixtureId, offset + 2) *
+            (mode === 'firstHalf' ? 1.1 : 2.0)
+        ).toFixed(2),
+      );
+      const form =
+        58 + Math.round(seededValue(fixtureId, offset + 3) * 34);
+      const confidence: SimulatedAnalysis['confidence'] =
+        edge >= 10 ? 'Alta' : edge >= 6 ? 'Média' : ('Baixa' as const);
+
+      return {
+        line,
+        odds: Number(odds.toFixed(2)),
+        probability,
+        edge: Number(edge.toFixed(1)),
+        goalsAverage,
+        form,
+        confidence,
+        factors: [
+          `Probabilidade simulada de ${probability}% comparada com ${marketProbability.toFixed(1)}% implícitos na odd.`,
+          `Média simulada de ${goalsAverage.toFixed(2)} golos para este recorte de mercado.`,
+          `Indicador de forma recente estimado em ${form}%.`,
+          `Edge robusto calculado em +${edge.toFixed(1)}%, resultando em confiança ${confidence.toLowerCase()}.`,
+        ],
+      };
+    })
+    .sort((left, right) => right.edge - left.edge);
 }
 
 function isFeaturedSignal(analysis: SimulatedAnalysis): boolean {
@@ -213,12 +234,14 @@ function MatchCard({
   index,
   analysis,
   isFeatured,
+  onOpen,
 }: {
   fixture: Fixture | LiveFixture;
   mode: MarketMode;
   index: number;
   analysis: SimulatedAnalysis;
   isFeatured: boolean;
+  onOpen: () => void;
 }) {
   const liveFixture = mode === 'live' ? (fixture as LiveFixture) : null;
 
@@ -226,6 +249,16 @@ function MatchCard({
     <article
       className={`match-card${isFeatured ? ' match-card-featured' : ''}`}
       style={{ animationDelay: `${Math.min(index, 12) * 45}ms` }}
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      data-testid={`card-match-${fixture.id}`}
     >
       {isFeatured && (
         <div className="featured-signal-badge">
@@ -304,11 +337,133 @@ function MatchCard({
         <Metric label="Forma" value={`${analysis.form}%`} />
       </div>
 
-      <button className="analysis-link" type="button">
+      <div className="analysis-link">
         Ver análise simulada
         <ChevronRight aria-hidden="true" />
-      </button>
+      </div>
     </article>
+  );
+}
+
+function MatchDetailModal({
+  selected,
+  onClose,
+}: {
+  selected: SelectedMatch;
+  onClose: () => void;
+}) {
+  const { fixture, mode, markets } = selected;
+  const liveFixture = mode === 'live' ? (fixture as LiveFixture) : null;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="match-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="match-modal-title"
+        data-testid={`dialog-match-${fixture.id}`}
+      >
+        <button
+          className="modal-close"
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar detalhes"
+          data-testid="button-close-match-detail"
+        >
+          <X aria-hidden="true" />
+        </button>
+
+        <header className="modal-header">
+          <span>{modeConfig[mode].label}</span>
+          <h2 id="match-modal-title">
+            {fixture.homeTeam} <small>vs</small> {fixture.awayTeam}
+          </h2>
+          <div className="modal-meta">
+            <span>
+              <Trophy aria-hidden="true" />
+              {fixture.league} · {fixture.country}
+            </span>
+            <span>
+              <Clock3 aria-hidden="true" />
+              {formatFixtureDate(fixture.kickoff)} ·{' '}
+              {formatKickoff(fixture.kickoff)}
+            </span>
+            {liveFixture && (
+              <span className="modal-live-score">
+                <Radio aria-hidden="true" />
+                {liveFixture.homeScore} — {liveFixture.awayScore} ·{' '}
+                {liveFixture.minute}'
+              </span>
+            )}
+          </div>
+        </header>
+
+        <div className="modal-simulated-notice">
+          <ShieldCheck aria-hidden="true" />
+          <strong>ANÁLISE SIMULADA</strong>
+          <span>
+            {mode === 'live'
+              ? 'Jogos, minuto e placar reais · Estatísticas, odds e sinais continuam simulados'
+              : 'Jogos reais de hoje · Odds e estatísticas ainda simuladas — versão de teste'}
+          </span>
+        </div>
+
+        <div className="modal-markets">
+          {markets.map((market) => (
+            <article className="modal-market" key={market.line}>
+              <div className="modal-market-heading">
+                <div>
+                  <span>Sinal simulado</span>
+                  <h3>{market.line}</h3>
+                </div>
+                <span
+                  className={`confidence ${confidenceClass(market.confidence)}`}
+                >
+                  {market.confidence}
+                </span>
+              </div>
+              <div className="modal-market-metrics">
+                <Metric label="Odd" value={market.odds.toFixed(2)} />
+                <Metric label="Prob." value={`${market.probability}%`} />
+                <Metric label="Edge" value={`+${market.edge}%`} accent />
+                <Metric
+                  label="Média golos"
+                  value={market.goalsAverage.toFixed(2)}
+                />
+                <Metric label="Forma" value={`${market.form}%`} />
+              </div>
+              <div className="modal-reasons">
+                <strong>Razões do sinal</strong>
+                <ul>
+                  {market.factors.map((factor) => (
+                    <li key={factor}>{factor}</li>
+                  ))}
+                </ul>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -363,6 +518,9 @@ function LoadingState() {
 
 function Dashboard() {
   const [mode, setMode] = useState<MarketMode>('full');
+  const [selectedMatch, setSelectedMatch] = useState<SelectedMatch | null>(
+    null,
+  );
   const todayQuery = useGetTodayFixtures({
       query: {
         queryKey: getGetTodayFixturesQueryKey(),
@@ -392,10 +550,12 @@ function Dashboard() {
     () =>
       fixtures
         .map((fixture, originalIndex) => {
-          const analysis = buildSimulation(fixture.id, mode);
+          const markets = buildMarketSignals(fixture.id, mode);
+          const analysis = markets[0];
           return {
             fixture,
             analysis,
+            markets,
             isFeatured: isFeaturedSignal(analysis),
             originalIndex,
           };
@@ -528,13 +688,14 @@ function Dashboard() {
         ) : (
           <div className="cards-grid">
             {rankedFixtures.map(
-              ({ fixture, analysis, isFeatured }, index) => (
+              ({ fixture, analysis, markets, isFeatured }, index) => (
               <MatchCard
                 fixture={fixture}
                 mode={mode}
                 index={index}
                 analysis={analysis}
                 isFeatured={isFeatured}
+                onOpen={() => setSelectedMatch({ fixture, mode, markets })}
                 key={`${mode}-${fixture.id}`}
               />
               ),
@@ -542,6 +703,13 @@ function Dashboard() {
           </div>
         )}
       </main>
+
+      {selectedMatch && (
+        <MatchDetailModal
+          selected={selectedMatch}
+          onClose={() => setSelectedMatch(null)}
+        />
+      )}
 
       <footer>
         <div>
